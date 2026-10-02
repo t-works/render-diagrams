@@ -314,15 +314,16 @@ and a plain loop handles directly. Emits errors (blocking) and warnings
 
 ### 5.8 Agent skill
 
-Location: `skills/render-diagram/` — a self-contained folder, so the whole
-`render-diagram/` directory can be copied into another project (and into
+Location: `skills/create-diagram-files/` — a self-contained folder, so the whole
+`create-diagram-files/` directory can be copied into another project (and into
 whatever skill location that project uses).
 
 ```
-skills/render-diagram/
+skills/create-diagram-files/
 ├── SKILL.md              # frontmatter + rules; kept short
 ├── references/schema.md  # §5.3 + §5.4 verbatim, loaded on demand
-└── assets/               # 2-3 worked example diagrams
+├── assets/               # 2-3 worked example diagrams
+└── scripts/validate.ts   # CLI wrapper over lib/validate.ts
 ```
 
 `SKILL.md` frontmatter requires a lowercase-hyphen `name` and a specific
@@ -334,14 +335,15 @@ skills/render-diagram/
    inside the §5.6 budget; use `sections` for detail rather than cramming text
    into `label`; color **only** from the palette and only where it carries
    meaning; short `meta.description`; one diagram per file.
-4. Output path: `src/diagrams/<meta.id>.json`.
-5. A mandatory `npm run validate` step and what to do with its output.
+4. Output directory parameter: defaults to `src/diagrams/<meta.id>.json`.
+5. A mandatory validation step, run via the skill's own
+   `scripts/validate.ts` CLI, and what to do with its output.
 
 ### 5.9 File layout
 
 ```
 <repo root>/
-    skills/render-diagram/   # portable agent skill (see §5.8)
+    skills/create-diagram-files/   # portable agent skill (see §5.8)
     src/
       App.tsx            # router + layout
       Topbar.tsx         # derived from diagram metas
@@ -354,7 +356,7 @@ skills/render-diagram/
       lib/palette.ts     # palette name -> CSS variable tokens (light/dark)
       nodes/*.tsx        # node components (incl. <details> sections)
       diagrams/*.json    # the content
-    scripts/validate.ts  # CLI wrapper over lib/validate.ts
+    skills/create-diagram-files/scripts/validate.ts  # CLI wrapper over lib/validate.ts
     doc/prd-draft.md
 ```
 

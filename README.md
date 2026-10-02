@@ -1,32 +1,54 @@
-# React + TypeScript + Vite
+# Semantic JSON → Diagram Visualizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Read-only viewer that turns a JSON file into an interactive, auto-laid-out
+React Flow diagram. Drop a file in `src/diagrams/`, reload, done — no registry,
+no coordinates, no code changes.
 
-Currently, two official plugins are available:
+See `docs/prd.md` for the full design.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Commands
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev        # http://localhost:5173
+npm run validate   # check src/diagrams/ (add `-- <dir>` for another dir)
+npm run build      # tsc -b && vite build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Adding a diagram
+
+1. Write `src/diagrams/<id>.json` following `skills/create-diagram-files/references/schema.md`
+   (or copy one of `skills/create-diagram-files/assets/*.json`).
+2. `npm run validate` and fix any errors.
+3. Reload the app. The file appears in the topbar with its own page at `/d/<id>`.
+
+Malformed diagrams still appear in the topbar, marked `!`, and route to a page
+listing their validation errors — a bad file never silently disappears.
+
+## Layout
+
+```
+src/
+  App.tsx            router + shell
+  Topbar.tsx         derived from diagram metas
+  DiagramPage.tsx    header + legend + ReactFlow + error panel
+  loader.ts          Vite glob + parse + validate + sort
+  nodes/             kind -> component registry and node bodies
+  lib/               schema, kinds, palette, validate, ELK layout, flow builder
+  diagrams/*.json    the content
+skills/create-diagram-files/  portable agent skill
+  scripts/validate.ts         self-contained validator (no project imports)
+```
+
+## Agent skill
+
+`skills/create-diagram-files/` is self-contained and can be copied into another
+project. Point an agent at `SKILL.md`; it will write a diagram and run its own
+validator:
+
+```sh
+npm run validate              # default src/diagrams/
+npm run validate -- <dir>     # custom directory
+npx tsx skills/create-diagram-files/scripts/validate.ts <dir>  # direct
+npx tsx skills/create-diagram-files/scripts/validate.ts --self-test  # check the checker
+```
