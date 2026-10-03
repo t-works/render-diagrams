@@ -7,7 +7,7 @@
 
 | Topic | Decision |
 |---|---|
-| Editability | **Read-only** viewer. Pan/zoom/select only. |
+| Editability | **Read-only** viewer. Pan/zoom/select, and resize a node or group. |
 | Diagram location | `src/diagrams/`. |
 | Discovery | Reload-time in dev, bundle-time in prod (§5.1). |
 | Topbar | **Flat**, sorted by `order`; `meta.group` not needed. |
@@ -224,8 +224,9 @@ inheritance makes an override on a child impossible to reason about.
 The auto-legend (§5.2) shows each kind's swatch.
 
 Default sizes exist so auto-layout can compute a result **before** first paint —
-no DOM measurement pass. Nodes render at their declared size; content that
-overflows (long labels, expanded sections on a fixed-size node) clips or scrolls.
+no DOM measurement pass. A declared size is the *collapsed* floor: long labels
+and section text wrap, which grows the node; a fixed-`size` node keeps the box
+and clips/scrolls instead.
 
 Any kind may carry `sections` (§5.5) — expandable detail is data, not a kind.
 
@@ -238,14 +239,17 @@ rendering stays consistent.
 Reuse the `` components:
 
 - `GroupNode` / `TaskNode` generalise into a `kind → component` registry.
-- Slots come from `inputs`/`outputs`; each renders a `<Handle>` on left/right
-  (top/bottom when `direction: "TB"`).
+- Slots come from `inputs`/`outputs`; each `<Handle>` sits *inside its own label
+  chip*, so the connector lands on the label that names it — on the left/right
+  edge for `LR`, top/bottom for `TB`.
 - `MiniMap`, `Controls`, `Background` per page, `fitView` on mount.
-- **Read-only:** `nodesDraggable={false}`, `nodesConnectable={false}`.
-  Pan/zoom stays on.
-- **Box model:** the node root renders at exactly its declared size (kind
-  default or `size`), with `overflow: hidden`. Declared size == rendered size —
-  that equality is what makes pre-paint layout valid.
+- **Read-only content:** `nodesConnectable={false}`, no delete. Pan/zoom/select
+  stay on, and a selected node or group can be **resized** to fix any leftover
+  sizing by hand.
+- **Box model:** the declared width is a floor (`min-width`); wrapping content
+  grows the height. A fixed-`size` node renders at exactly that box with
+  `overflow: hidden`. First-paint layout is valid because the declared sizes are
+  the collapsed sizes.
 - Invalid diagram → an error panel with the validator's messages, not a crash.
 
 **Sections** use native `<details>` / `<summary>` — expand/collapse, keyboard
@@ -268,17 +272,20 @@ access and focus all come free, no state library.
 
 - Layout is computed from **collapsed** sizes, with `sections[].open` applied
   only to presentation.
-- Expanding grows the node in place. Edges re-route for free (React Flow tracks
-  handle positions online). Siblings do not move, so an expanded node can
+- Once the DOM has measured, layout runs **once more** against the real sizes so
+  wrapped labels and initially-open sections are not clipped and groups are
+  sized to their actual children (containers are left for ELK to size).
+- Expanding later grows the node in place. Edges re-route for free (React Flow
+  tracks handle positions online). Siblings do not move, so an expanded node can
   overlap a neighbour.
 - A **Re-layout** action re-runs ELK against measured (expanded) heights to
   clean that up. Not automatic — auto re-layout makes the canvas jump while
   reading.
 - Fixed-`size` nodes scroll their section body instead of growing.
 
-> `ponytail:` expansion does not re-layout; worst case is visual overlap until
-> the user hits Re-layout. Add ResizeObserver-driven auto-layout only if overlap
-> turns out to be common in real diagrams.
+> `ponytail:` expansion after first paint does not re-layout; worst case is
+> visual overlap until the user hits Re-layout. Add ResizeObserver-driven
+> auto-layout only if overlap turns out to be common in real diagrams.
 
 ### 5.6 Budget
 

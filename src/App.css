@@ -317,10 +317,13 @@
   border-radius: 8px;
   background: var(--kn-bg, var(--surface));
   color: var(--kn-text, var(--fg));
+  /* Long unbreakable labels/paths wrap instead of being clipped. Inherited. */
+  overflow-wrap: anywhere;
   overflow: hidden;
 }
 
 .kn {
+  position: relative;
   display: flex;
   flex-direction: column;
   padding: 8px 10px;
@@ -349,19 +352,61 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+
+.kn__col--in {
+  align-items: flex-start;
 }
 
 .kn__col--out {
   align-items: flex-end;
 }
 
+/* TB: input chips sit above the title, output chips below the body. */
+.kn__row {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-evenly;
+  gap: 6px;
+}
+
+.kn__row--in {
+  margin-bottom: 6px;
+}
+
+.kn__row--out {
+  margin-top: 6px;
+}
+
+/* A label chip is also the positioning context for its connector handle.
+   Long labels wrap instead of being clipped by the node's `overflow: hidden`. */
 .kn__port {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
   padding: 0 5px;
   border-radius: 4px;
   background: var(--kn-accent, var(--border));
   font-size: 10px;
   line-height: 16px;
-  white-space: nowrap;
+}
+
+/* Pull each handle out of its chip until it sits on the node border (§5.5). */
+.kn--LR .kn__col--in .react-flow__handle {
+  left: -11px;
+}
+.kn--LR .kn__col--out .react-flow__handle {
+  right: -11px;
+}
+.kn--TB .kn__row--in .react-flow__handle {
+  top: -9px;
+}
+.kn--TB .kn__row--out .react-flow__handle {
+  bottom: -9px;
 }
 
 .kn__sections {

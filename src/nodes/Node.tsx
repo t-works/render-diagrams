@@ -1,5 +1,4 @@
-import type { CSSProperties } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import type { Direction, NodeSpec, Port, Section } from '../lib/schema';
 import { resolveColor } from '../lib/validate';
 
@@ -15,13 +14,29 @@ const CARDINAL = {
   TB: { in: Position.Top, out: Position.Bottom },
 } as const;
 
-/** Spread n handles evenly along the node edge. */
-function slot(index: number, count: number, dir: Direction): CSSProperties {
-  const pct = count <= 1 ? 50 : ((index + 1) / (count + 1)) * 100;
-  return dir === 'LR' ? { top: `${pct}%` } : { left: `${pct}%` };
+const portLabel = (p: Port) => p.label ?? p.id;
+
+/**
+ * One port. The <Handle> lives inside its own label chip, so a connector always
+ * lands exactly on the label that names it — no separate slot maths to drift
+ * out of sync (§5.5).
+ */
+function PortChip({ port, side, direction }: { port: Port; side: 'in' | 'out'; direction: Direction }) {
+  return (
+    <span className="kn__port">
+      <Handle
+        id={port.id}
+        type={side === 'in' ? 'target' : 'source'}
+        position={CARDINAL[direction][side]}
+        isConnectable={false}
+      />
+      {portLabel(port)}
+    </span>
+  );
 }
 
-const portLabel = (p: Port) => p.label ?? p.id;
+const chips = (ports: Port[], side: 'in' | 'out', direction: Direction) =>
+  ports.map((p) => <PortChip key={p.id} port={p} side={side} direction={direction} />);
 
 /** Native <details>/<summary>: expand/collapse, keyboard and focus come free (§5.5). */
 function Sections({ sections }: { sections: Section[] }) {
@@ -43,68 +58,45 @@ function Sections({ sections }: { sections: Section[] }) {
 }
 
 /** Generic node body shared by every non-group kind (§5.4). */
-export function KindNode({ data }: NodeProps) {
+export function KindNode({ data, selected }: NodeProps) {
   const { spec, direction, fixed } = data as unknown as NodeData;
   const inputs = spec.inputs ?? [];
   const outputs = spec.outputs ?? [];
-  const hasPorts = inputs.length > 0 || outputs.length > 0;
+  const tb = direction === 'TB';
 
   return (
-    <div className={`kn kn--${resolveColor(spec.kind, spec.color)}${fixed ? ' kn--fixed' : ''}`}>
-      {inputs.map((p, i) => (
-        <Handle
-          key={`in-${p.id}`}
-          id={p.id}
-          type="target"
-          position={CARDINAL[direction].in}
-          isConnectable={false}
-          style={slot(i, inputs.length, direction)}
-        />
-      ))}
-      {outputs.map((p, i) => (
-        <Handle
-          key={`out-${p.id}`}
-          id={p.id}
-          type="source"
-          position={CARDINAL[direction].out}
-          isConnectable={false}
-          style={slot(i, outputs.length, direction)}
-        />
-      ))}
+    <>
+      <NodeResizer isVisible={selected} minWidth={80} minHeight={40} />
+      <div className={`kn kn--${resolveColor(spec.kind, spec.color)} kn--${direction}${fixed ? ' kn--fixed' : ''}`}>
+        {tb && inputs.length > 0 && <div className="kn__row kn__row--in">{chips(inputs, 'in', direction)}</div>}
 
-      <div className="kn__title">{spec.label}</div>
+        <div className="kn__title">{spec.label}</div>
 
-      {hasPorts && (
-        <div className="kn__ports">
-          <div className="kn__col kn__col--in">
-            {inputs.map((p) => (
-              <span key={p.id} className="kn__port">
-                {portLabel(p)}
-              </span>
-            ))}
+        {!tb && (inputs.length > 0 || outputs.length > 0) && (
+          <div className="kn__ports">
+            <div className="kn__col kn__col--in">{chips(inputs, 'in', direction)}</div>
+            <div className="kn__col kn__col--out">{chips(outputs, 'out', direction)}</div>
           </div>
-          <div className="kn__col kn__col--out">
-            {outputs.map((p) => (
-              <span key={p.id} className="kn__port">
-                {portLabel(p)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      <Sections sections={spec.sections ?? []} />
-    </div>
+        <Sections sections={spec.sections ?? []} />
+
+        {tb && outputs.length > 0 && <div className="kn__row kn__row--out">{chips(outputs, 'out', direction)}</div>}
+      </div>
+    </>
   );
 }
 
-/** Container/lane. ELK gives it its size; children render on top. */
-export function GroupNode({ data }: NodeProps) {
+/** Container/lane. ELK gives it its size; children render on top. Resizable. */
+export function GroupNode({ data, selected }: NodeProps) {
   const { spec } = data as unknown as NodeData;
   return (
-    <div className={`gn kn--${resolveColor(spec.kind, spec.color)}`}>
-      <div className="gn__title">{spec.label}</div>
-      <Sections sections={spec.sections ?? []} />
-    </div>
+    <>
+      <NodeResizer isVisible={selected} minWidth={80} minHeight={60} />
+      <div className={`gn kn--${resolveColor(spec.kind, spec.color)}`}>
+        <div className="gn__title">{spec.label}</div>
+        <Sections sections={spec.sections ?? []} />
+      </div>
+    </>
   );
 }
