@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { layoutDiagram } from './lib/layout';
-import { buildFlow, growGroups } from './lib/flow';
+import { buildFlow } from './lib/flow';
 import { nodeTypes } from './nodes/registry';
 import { BUDGET, type Size } from './lib/schema';
 import { kindMeta } from './lib/kinds';
@@ -41,7 +41,7 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   const [ready, setReady] = useState(false);
   const { fitView, getNodes } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
-  const grown = useRef(false);
+  const settled = useRef(false);
 
   const diagram = loaded.diagram;
 
@@ -64,20 +64,16 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
     };
   }, [diagram, setNodes, setEdges]);
 
-  // Once measured, fit each group to its rendered children (open sections make a child
-  // taller than the collapsed size ELK reserved). No node moves, so nothing jumps.
-  useEffect(() => {
-    if (!ready || !nodesInitialized || grown.current) return;
-    grown.current = true;
-    setNodes((current) => growGroups(current));
-    requestAnimationFrame(() => fitView({ padding: 0.15 }));
-  }, [ready, nodesInitialized, setNodes, fitView]);
-
-  /** Re-run ELK against measured (expanded) heights to clean up overlap (§5.5). */
+  /**
+   * Re-run ELK against measured (wrapped labels, expanded sections) heights so no
+   * node is clipped and each group is sized to its real children (§5.5).
+   * Containers are omitted: ELK derives their size from the children it places.
+   */
   const relayout = useCallback(() => {
     if (!diagram) return;
     const overrides = new Map<string, Size>();
     for (const n of getNodes()) {
+      if (n.type === 'group') continue;
       const width = n.measured?.width ?? n.width;
       const height = n.measured?.height ?? n.height;
       if (width && height) overrides.set(n.id, { width, height });
@@ -91,6 +87,13 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
       })
       .catch((e: unknown) => console.error('Layout failed', e));
   }, [diagram, getNodes, setNodes, setEdges, fitView]);
+
+  // First pass lays out collapsed sizes; once measured, lay out again for real ones.
+  useEffect(() => {
+    if (!ready || !nodesInitialized || settled.current) return;
+    settled.current = true;
+    relayout();
+  }, [ready, nodesInitialized, relayout]);
 
   const kinds = useMemo(() => {
     const present = new Set((diagram?.nodes ?? []).map((n) => n.kind));
