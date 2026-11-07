@@ -16,8 +16,8 @@ Test level is one of `e2e` | `none`. Fixed gates for the run: `npx tsc -b`,
       Re-layout/Reset (inline confirm), reusing the existing handlers and test
       ids; close on Escape, outside pointerdown and item activation; ArrowDown/
       Up/Home/End move focus; focus returns to the trigger on close; move
-      description + legend out of the header into an `aside` drawer with a close
-      button, `inert`/`aria-hidden` while closed and focus returned to the info
+      title + description + legend out of the header into an `aside` drawer with
+      a close button (title visible, hidden `h1` kept), `inert`/`aria-hidden` while closed and focus returned to the info
       trigger; keep the hidden file input mounted at page level; keep the title,
       status line, validation panels and canvas in place; cancel a pending Reset
       confirmation whenever the menu closes - satisfies AC1/AC2/AC3/AC4/AC5
@@ -30,8 +30,8 @@ Test level is one of `e2e` | `none`. Fixed gates for the run: `npx tsc -b`,
       `.page__header`, drop the now-unused `.page__description` rule and keep
       the legend styles for the drawer - satisfies AC3/AC4/AC6/AC7 (test: none)
 - [x] `e2e/nav-shell.spec.ts` (NEW) - triggers at the right end of the topbar and
-      absent from the page body; menu contents in order; drawer holds the
-      description and legend and not the page; canvas box and node snapshots
+      absent from the page body; menu contents in order; drawer holds the title,
+      description and legend and the page has no header; canvas box and node snapshots
       identical open vs closed; Escape/close/outside-click dismiss with focus
       returned; ArrowDown moves through menu items; 320 px viewport keeps both
       triggers visible and the drawer in bounds; reduced-motion emulation leaves

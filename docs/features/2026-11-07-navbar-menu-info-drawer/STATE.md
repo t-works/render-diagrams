@@ -41,3 +41,8 @@ Plan review: not run (single-run shell change, folded into the run's gates).
   locally disabled with a reason rather than lifted into `App`.
 - Gates: `npx tsc -b`, `npx oxlint`, `npm run validate`, `npx playwright test`
   (32 passed / 1 skipped — the skip is the existing Run 3 fixme).
+- User feedback after the first pass: the drawer was not found and the title
+  should move too. Verified the drawer did open in a real browser (screenshot at
+  1280x760), then moved the title into the drawer and gave the trigger a visible
+  "Info" label; the page header is gone and a visually hidden `h1` keeps the
+  outline. AC1/AC3 updated to assert the title and the labeled trigger.

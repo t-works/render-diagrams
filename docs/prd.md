@@ -99,12 +99,10 @@ point of the "standard prop" requirement. Its right end holds an **info**
 button and a **hamburger** menu: the menu carries the diagram actions
 (Re-layout/Reset, Download, Upload), so no action button sits in the page body.
 
-**Page header** = `meta.title` only.
-
-**Info drawer** = `meta.description` plus the auto-derived legend, in a panel
-that slides in from the left and overlays the diagram area (opening it never
-reflows the canvas). Dismissed with Escape, its close button, or a click on the
-diagram.
+**No page header.** The diagram title, `meta.description` and the legend live
+in the info drawer, which slides in from the left and overlays the diagram area
+(opening it never reflows the canvas). Dismissed with Escape, its close button,
+or a click on the diagram. A visually hidden `h1` keeps the document heading.
 
 **Legend** = auto-derived: the set of `kind`s actually present in the diagram,
 rendered with each kind's label + one-line `description` from the registry
@@ -386,7 +384,7 @@ skills/create-diagram-files/
 | M | Deliverable | Done when |
 |---|---|---|
 | M0 | Schema frozen + validator + CLI | `npm run validate` catches each invariant in §5.3 |
-| M1 | Loader + topbar + routing + page header/legend + error panel | 3 JSON files, each at `/d/:id`, nav auto-built, legend matches contents |
+| M1 | Loader + topbar + routing + info drawer/legend + error panel | 3 JSON files, each at `/d/:id`, nav auto-built, legend matches contents |
 | M2 | Kind registry + default sizes + ELK layout + benchmark | All §5.4 kinds render; nested groups laid out; budget table (§5.6) corrected with real numbers |
 | M3 | Node sections + Re-layout action | `<details>` sections expand in place; Re-layout resolves overlap |
 | M4 | Agent skill + 3 real diagrams | A fresh session produces a valid diagram that renders, first try |

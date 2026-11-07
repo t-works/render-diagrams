@@ -27,8 +27,8 @@ single, predictable place for each kind of control.
 
 1. The layout/version action buttons live behind a single hamburger menu on the
    right side of the navbar. No action button remains in the page body.
-2. Description and legend are reachable from a left slide-in panel that opens
-   over the diagram area.
+2. The diagram title, description and legend are reachable from a left
+   slide-in panel that opens over the diagram area; no header row remains.
 3. The panel overlays the canvas: opening or closing it never reflows, resizes
    or repositions the diagram, and never changes node geometry.
 4. Everything the buttons do today still works from the menu, unchanged:
@@ -58,10 +58,11 @@ single, predictable place for each kind of control.
    each performs exactly its current behavior, including the inline Reset
    confirmation, autosave on drag/resize, per-diagram storage scope, and the
    aria-live status line.
-3. **Info in the drawer** — Given a diagram with a description and/or legend,
-   when the info panel is opened, then that description and legend appear inside
-   the left panel; when it is closed, its content is not in the tab order and not
-   exposed to assistive technology.
+3. **Info in the drawer** — Given a diagram, when the info panel is opened,
+   then its title, description (when present) and legend (when present) appear
+   inside the left panel; when it is closed, its content is not in the tab order
+   and not exposed to assistive technology. The page keeps a single document
+   heading (visually hidden) so the outline is intact either way.
 4. **Overlay, not reflow** — Given the diagram canvas, when the drawer opens and
    closes, then the canvas bounding box and every node's model position and size
    are unchanged.
@@ -86,24 +87,24 @@ buttons on the right.
 
 **After:**
 
-- **Topbar** — nav links unchanged on the left; the right end gains two icon
-  buttons: an info button and a hamburger (“Diagram actions”). The page header
-  keeps only the diagram title.
+- **Topbar** — nav links unchanged on the left; the right end gains a labeled
+  **Info** button and a hamburger (“Diagram actions”). There is no page header
+  row: the diagram title, description and legend all live in the drawer.
 - **Menu** — Download, Upload and Re-layout/Reset live in a dropdown anchored to
   the hamburger. Reset still asks for confirmation before clearing; that
   confirmation is a menu state (prompt + Reset/Cancel items), so the destructive
   path is unchanged.
-- **Drawer** — a left panel slides over the page area with the diagram
-  description and the kind legend, and a close button. No scrim; clicking the
-  diagram, pressing Escape, or pressing the close button dismisses it.
+- **Drawer** — a left panel slides over the diagram area with the diagram
+  title, description and the kind legend, and a close button. No scrim; clicking
+  the diagram, pressing Escape, or pressing the close button dismisses it.
 - **Canvas** — same size before and after; the drawer is an overlay, not a
   layout participant.
 
 **Edge cases and empty/error states**
 
-- No description and no legend (e.g. no known kinds): the drawer shows a short
-  “No additional information for this diagram.” line and the info trigger stays
-  present.
+- No description and no legend (e.g. no known kinds): the drawer still shows
+  the title plus a short “No additional information for this diagram.” line and
+  the info trigger stays present.
 - Diagram invalid (`loaded.errors` non-empty): the canvas/actions are absent as
   today; the info trigger still opens whatever description exists, and the
   error panel is unchanged.
@@ -148,9 +149,11 @@ selector churn in the e2e suite, which the gates catch directly.
 | # | Decision | Source | Date |
 |---|---|---|---|
 | 1 | Hamburger menu on the right holds Re-layout/Reset, Download, Upload | user | 2026-11-07 |
-| 2 | Description + legend move to a left slide-in panel; title stays as the page heading | user | 2026-11-07 |
+| 2 | Title + description + legend move to a left slide-in panel; no page header remains (revised: the title goes too) | user | 2026-11-07 |
 | 3 | The panel overlays the diagram area (no canvas reflow) | user | 2026-11-07 |
 | 4 | Reset confirmation becomes menu state; no separate dialog | orchestrator | 2026-11-07 |
 | 5 | Validation panels stay in the page flow | orchestrator | 2026-11-07 |
 | 6 | Hidden upload input stays mounted at page level | orchestrator | 2026-11-07 |
 | 7 | No menu/drawer state persistence; both reset on navigation | orchestrator | 2026-11-07 |
+| 8 | A visually hidden `h1` keeps the document heading when the drawer is closed | orchestrator | 2026-11-07 |
+| 9 | The Info trigger gets a visible label (an icon-only trigger read as “nothing there”) | orchestrator | 2026-11-07 |

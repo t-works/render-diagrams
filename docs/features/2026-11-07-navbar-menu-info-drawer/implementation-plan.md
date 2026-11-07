@@ -13,8 +13,8 @@ panels and canvas.
 | File | Change |
 |---|---|
 | `src/Topbar.tsx` | Render an empty `#topbar-actions` slot at the right end (after the nav). |
-| `src/DiagramPage.tsx` | Portal the info + actions triggers into the slot; dropdown menu with the existing handlers; drawer markup; move description/legend out of the header; keep the hidden file input mounted at page level; menu/drawer focus + Escape/outside-click handling. |
-| `src/App.css` | Topbar actions slot, icon buttons, menu, drawer, slimmer header; remove the unused `.page__description` rule; reduced-motion overrides. |
+| `src/DiagramPage.tsx` | Portal the info + actions triggers into the slot; dropdown menu with the existing handlers; drawer markup with the title, description and legend (no page header; a visually hidden `h1` keeps the outline); keep the hidden file input mounted at page level; menu/drawer focus + Escape/outside-click handling. |
+| `src/App.css` | Topbar actions slot, icon buttons (the Info trigger is labeled), menu, drawer, `.sr-only`; remove the unused header rules; reduced-motion overrides. |
 | `e2e/nav-shell.spec.ts` (new) | Shell ACs: triggers, menu contents, drawer contents, overlay/no-reflow, keyboard + focus return, narrow width, reduced motion. |
 | `e2e/smoke.spec.ts` | Open the menu before asserting Re-layout is enabled. |
 | `e2e/no-version.spec.ts` | Open the menu in the Re-layout test. |
@@ -59,6 +59,11 @@ No change to `src/lib/*`, storage keys, validation, or ELK.
    (AC4), and the canvas keeps its full area after the header slims down.
 4. **No scrim.** A scrim would block the canvas; "click the diagram to dismiss"
    is handled by an outside-pointerdown listener and is cheaper.
+5. **Title in the drawer, `h1` kept for the outline.** The visible title moves
+   with the description; a visually hidden `h1` stays in the page so the document
+   still has a heading while the drawer is closed.
+6. **Labeled Info trigger.** An icon-only trigger was mistaken for decoration;
+   the button shows the word "Info" next to the glyph.
 5. **`inert` over conditional rendering** for the drawer, so the slide transition
    can play both ways while closed content stays out of the tab order.
 
@@ -78,6 +83,8 @@ the ~8-file run limit if tests count separately; one run is enough.
 | `inert` typing/support | React 19 boolean prop, Chromium target; assert `aria-hidden`/tab behavior rather than the attribute. |
 | Hidden file input lost on menu close | Input mounted at page level; Upload item only calls `.click()`. |
 | Drawer covering the only close affordance on tiny screens | Close button inside the drawer, Escape, and outside click; width `min(380px, 88vw)`. |
+| No visible page title once the header is gone | Visually hidden `h1`, drawer title, and the active nav link all name the diagram. |
+| An icon-only Info trigger is not discoverable | Visible "Info" label (AC1 asserts the accessible name). |
 
 ## Runs
 

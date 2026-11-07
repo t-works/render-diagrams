@@ -53,8 +53,9 @@ reload or navigating away and back restores what you arranged. Each version is
 scoped to one diagram id; other diagrams keep their own auto-layout.
 
 The actions live in the topbar's hamburger menu at the right end of the navbar;
-the diagram description and kind legend live in the info panel that slides in
-from the left and overlays the diagram. Nothing takes space away from the canvas.
+the diagram title, description and kind legend live in the **Info** panel that
+slides in from the left and overlays the diagram. Nothing takes space away from
+the canvas, and there is no page header row.
 
 | Action | Behavior |
 |---|---|
