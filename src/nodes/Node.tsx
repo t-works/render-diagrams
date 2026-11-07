@@ -1,6 +1,7 @@
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
-import type { Direction, NodeSpec, Port, Section } from '../lib/schema';
+import type { Direction, NodeSpec, Port } from '../lib/schema';
 import { resolveColor } from '../lib/validate';
+import { useOpenSections, useSectionToggle } from './SectionsContext';
 
 export interface NodeData extends Record<string, unknown> {
   spec: NodeSpec;
@@ -38,21 +39,40 @@ function PortChip({ port, side, direction }: { port: Port; side: 'in' | 'out'; d
 const chips = (ports: Port[], side: 'in' | 'out', direction: Direction) =>
   ports.map((p) => <PortChip key={p.id} port={p} side={side} direction={direction} />);
 
-/** Native <details>/<summary>: expand/collapse, keyboard and focus come free (§5.5). */
-function Sections({ sections }: { sections: Section[] }) {
+/**
+ * Native <details>/<summary> gives expand/collapse, keyboard and focus for free
+ * (§5.5). The `open` attribute is controlled by the page's expansion state so a
+ * toggle survives a reload and is recorded by autosave/Download; the guard keeps
+ * the programmatic attribute write from reporting a second, phantom toggle.
+ */
+function Sections({ spec }: { spec: NodeSpec }) {
+  const sections = spec.sections ?? [];
+  const open = useOpenSections(spec);
+  const toggle = useSectionToggle();
   if (sections.length === 0) return null;
   return (
     <div className="kn__sections">
-      {sections.map((s) => (
-        <details key={s.id} className="kn__section" {...(s.open ? { open: true } : {})}>
-          <summary>{s.label}</summary>
-          <ul>
-            {(s.items ?? []).map((item, i) => (
-              <li key={i}>{item}</li>
-            ))}
-          </ul>
-        </details>
-      ))}
+      {sections.map((s) => {
+        const expanded = open.includes(s.id);
+        return (
+          <details
+            key={s.id}
+            className="kn__section"
+            open={expanded}
+            onToggle={(event) => {
+              const next = event.currentTarget.open;
+              if (next !== expanded) toggle(spec.id, s.id, next);
+            }}
+          >
+            <summary>{s.label}</summary>
+            <ul>
+              {(s.items ?? []).map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </details>
+        );
+      })}
     </div>
   );
 }
@@ -79,7 +99,7 @@ export function KindNode({ data, selected }: NodeProps) {
           </div>
         )}
 
-        <Sections sections={spec.sections ?? []} />
+        <Sections spec={spec} />
 
         {tb && outputs.length > 0 && <div className="kn__row kn__row--out">{chips(outputs, 'out', direction)}</div>}
       </div>
@@ -95,7 +115,7 @@ export function GroupNode({ data, selected }: NodeProps) {
       <NodeResizer isVisible={selected} minWidth={80} minHeight={60} />
       <div className={`gn kn--${resolveColor(spec.kind, spec.color)}`}>
         <div className="gn__title">{spec.label}</div>
-        <Sections sections={spec.sections ?? []} />
+        <Sections spec={spec} />
       </div>
     </>
   );

@@ -13,12 +13,15 @@
  */
 import type { Node } from '@xyflow/react';
 import type { Diagram, NodeSpec } from './schema';
+import { openSectionIds, type SectionState } from './sections';
 
-/** One recorded node's geometry, keyed by node id. */
+/** One recorded node: geometry, plus which of its sections were expanded. */
 export interface VersionNode {
   id: string;
   position?: { x: number; y: number };
   size?: { width: number; height?: number };
+  /** Ids of the sections that were expanded when the version was saved. */
+  open?: string[];
 }
 
 /** The persisted envelope. */
@@ -65,6 +68,11 @@ export function parseVersion(raw: unknown): LayoutVersion | null {
     const position = entry.position;
     if (isRecord(position) && isFiniteNumber(position.x) && isFiniteNumber(position.y)) {
       node.position = { x: position.x, y: position.y };
+    }
+
+    const open = entry.open;
+    if (Array.isArray(open)) {
+      node.open = open.filter((id): id is string => typeof id === 'string' && id !== '');
     }
 
     const size = entry.size;
@@ -120,10 +128,15 @@ export type SaveOutcome =
  * geometry is not written (`empty`): the key stays absent so the load path keeps
  * taking the untouched auto-layout branch. Re-saving replaces the old version.
  */
-export function saveVersion(id: string, diagram: Diagram, nodes: readonly Node[]): SaveOutcome {
+export function saveVersion(
+  id: string,
+  diagram: Diagram,
+  nodes: readonly Node[],
+  sections: SectionState = {},
+): SaveOutcome {
   // The caller's id is authoritative for the storage key, so a version can never
   // be written under a different diagram's key.
-  const version: LayoutVersion = { ...serializeVersion(diagram, nodes), id };
+  const version: LayoutVersion = { ...serializeVersion(diagram, nodes, sections), id };
   if (!hasGeometry(version)) return { status: 'empty' };
   return writeVersion(version) ? { status: 'saved', version } : { status: 'unavailable' };
 }
@@ -193,6 +206,12 @@ export function mergeGeometry(diagram: Diagram, version: unknown): Diagram {
     const next: NodeSpec = { ...spec };
     if (recorded.position) next.position = { x: recorded.position.x, y: recorded.position.y };
     if (recorded.size) next.size = { ...recorded.size };
+    // A recorded expansion state is authoritative (an empty list means "all
+    // collapsed"), so the file's authored `open` flags are overridden.
+    if (recorded.open && spec.sections?.length) {
+      const open = new Set(recorded.open);
+      next.sections = spec.sections.map((section) => ({ ...section, open: open.has(section.id) }));
+    }
     return next;
   });
 
@@ -206,10 +225,15 @@ function isContainerSpec(spec: NodeSpec, childIds: ReadonlySet<string>): boolean
 
 /**
  * Pure serializer for the live React Flow node list: `position` and `width` are
- * recorded for every node, `height` only for containers/groups. Nodes with no
- * matching spec (or no measurable width) are skipped.
+ * recorded for every node, `height` only for containers/groups, and the expanded
+ * section ids for nodes that have sections. Nodes with no matching spec (or no
+ * measurable width) are skipped.
  */
-export function serializeVersion(diagram: Diagram, nodes: readonly Node[]): LayoutVersion {
+export function serializeVersion(
+  diagram: Diagram,
+  nodes: readonly Node[],
+  sections: SectionState = {},
+): LayoutVersion {
   const specById = new Map(diagram.nodes.map((spec) => [spec.id, spec]));
   const childIds = new Set(
     diagram.nodes.map((spec) => spec.parent).filter((parent): parent is string => typeof parent === 'string'),
@@ -229,10 +253,18 @@ export function serializeVersion(diagram: Diagram, nodes: readonly Node[]): Layo
       size: { width: round2(width) },
     };
     if (isContainerSpec(spec, childIds) && height !== undefined) entry.size!.height = round2(height);
+    if (spec.sections?.length) entry.open = openSectionIds(sections, spec);
     recorded.push(entry);
   }
 
   return { id: diagram.meta.id, nodes: recorded };
+}
+
+/** Write the effective expansion state into a node's sections (never mutates). */
+function withSections(spec: NodeSpec, sections: SectionState): NodeSpec {
+  if (!spec.sections?.length) return spec;
+  const open = new Set(openSectionIds(sections, spec));
+  return { ...spec, sections: spec.sections.map((section) => ({ ...section, open: open.has(section.id) })) };
 }
 
 /**
@@ -244,7 +276,11 @@ export function serializeVersion(diagram: Diagram, nodes: readonly Node[]): Layo
  * every measured node, height only for containers/groups. Nodes without a live
  * match (or without a measurable width) keep whatever the author wrote.
  */
-export function exportDiagram(diagram: Diagram, nodes: readonly Node[]): Diagram {
+export function exportDiagram(
+  diagram: Diagram,
+  nodes: readonly Node[],
+  sections: SectionState = {},
+): Diagram {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const childIds = new Set(
     diagram.nodes.map((spec) => spec.parent).filter((parent): parent is string => typeof parent === 'string'),
@@ -253,7 +289,7 @@ export function exportDiagram(diagram: Diagram, nodes: readonly Node[]): Diagram
   const exported: NodeSpec[] = diagram.nodes.map((spec) => {
     const live = byId.get(spec.id);
     const width = live ? (live.width ?? live.measured?.width) : undefined;
-    if (!live || width === undefined) return { ...spec };
+    if (!live || width === undefined) return withSections(spec, sections);
 
     const height = live.height ?? live.measured?.height;
     const next: NodeSpec = {
@@ -264,7 +300,7 @@ export function exportDiagram(diagram: Diagram, nodes: readonly Node[]): Diagram
     if (isContainerSpec(spec, childIds) && height !== undefined) {
       next.size = { width: round2(width), height: round2(height) };
     }
-    return next;
+    return withSections(next, sections);
   });
 
   return { ...diagram, nodes: exported };

@@ -23,6 +23,7 @@ interface SavedNode {
   id: string;
   position?: { x: number; y: number };
   size?: { width: number; height?: number };
+  open?: string[];
 }
 
 interface SavedVersion {
@@ -30,14 +31,19 @@ interface SavedVersion {
   nodes: SavedNode[];
 }
 
+interface Sections {
+  state: Record<string, string[]>;
+}
+
 interface VersionsModule {
-  saveVersion: (id: string, diagram: unknown, nodes: unknown[]) => SaveOutcome;
+  saveVersion: (id: string, diagram: unknown, nodes: unknown[], sections?: Sections['state']) => SaveOutcome;
   writeVersion: (version: unknown) => boolean;
   clearVersion: (id: string) => boolean;
   readUploadedVersion: (file: File) => Promise<SavedVersion | null>;
   downloadVersion: (id: string, payload: unknown) => boolean;
-  serializeVersion: (diagram: unknown, nodes: unknown[]) => SavedVersion;
-  exportDiagram: (diagram: unknown, nodes: unknown[]) => ExportedDiagram;
+  serializeVersion: (diagram: unknown, nodes: unknown[], sections?: Sections['state']) => SavedVersion;
+  exportDiagram: (diagram: unknown, nodes: unknown[], sections?: Sections['state']) => ExportedDiagram;
+  mergeGeometry: (diagram: unknown, version: unknown) => TestDiagram;
 }
 
 /** The downloaded artifact: a complete, valid diagram with geometry added. */
@@ -69,7 +75,7 @@ interface TestSpecNode {
   color?: string;
   inputs?: unknown[];
   outputs?: unknown[];
-  sections?: Array<{ id: string; label: string; items?: string[] }>;
+  sections?: Array<{ id: string; label: string; open?: boolean; items?: string[] }>;
 }
 
 interface TestDiagram {
@@ -168,6 +174,16 @@ async function dragNode(page: Page, id: string, dx: number, dy: number): Promise
   await page.mouse.down();
   await page.mouse.move(startX + dx, startY + dy, { steps: 8 });
   await page.mouse.up();
+}
+
+/** `[label, open]` for each section of one node, in document order. */
+async function sectionState(page: Page, nodeId: string): Promise<Array<[string, boolean]>> {
+  return page.locator(`.react-flow__node[data-id="${nodeId}"] details`).evaluateAll((els) =>
+    els.map((el) => [
+      (el.querySelector('summary')?.textContent ?? '').trim(),
+      (el as HTMLDetailsElement).open,
+    ]) as Array<[string, boolean]>,
+  );
 }
 
 const leafOf = (version: SavedVersion): SavedNode => {
@@ -372,6 +388,40 @@ test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page 
   expect(leafOf(persisted).size?.height).toBeUndefined();
 });
 
+test('autosaves expanded sections and restores them after a reload (AC3/AC10)', async ({ page }) => {
+  await openFixture(page);
+  const leaf = page.locator('.react-flow__node[data-id="e2e-leaf"]');
+
+  // The fixture authors `details` open and `notes` collapsed.
+  expect(await sectionState(page, 'e2e-leaf')).toEqual([
+    ['Details', true],
+    ['Notes', false],
+  ]);
+
+  await leaf.locator('details', { hasText: 'Notes' }).locator('summary').click();
+  await leaf.locator('details', { hasText: 'Details' }).locator('summary').click();
+
+  const saved = await expectSaved(page);
+  expect(leafOf(saved).open).toEqual(['notes']);
+
+  // Expansion is part of the saved view, not transient DOM state.
+  await page.reload();
+  await openFixture(page);
+  expect(await sectionState(page, 'e2e-leaf')).toEqual([
+    ['Details', false],
+    ['Notes', true],
+  ]);
+
+  // A later drag re-saves the same expansion (it must not fall back to the file).
+  await dragNode(page, 'e2e-leaf', 60, 40);
+  const afterDrag = await expectSaved(page);
+  expect(leafOf(afterDrag).open).toEqual(['notes']);
+  expect(await sectionState(page, 'e2e-leaf')).toEqual([
+    ['Details', false],
+    ['Notes', true],
+  ]);
+});
+
 test('a version stored for another diagram id is ignored (AC5)', async ({ page }) => {
   const foreign: SavedVersion = {
     id: 'some-other-diagram',
@@ -510,7 +560,10 @@ function fixtureDiagram(): TestDiagram {
         label: 'Leaf',
         color: 'teal',
         outputs: [{ id: 'out' }],
-        sections: [{ id: 'details', label: 'Details', items: ['one'] }],
+        sections: [
+          { id: 'details', label: 'Details', open: true, items: ['one'] },
+          { id: 'notes', label: 'Notes', items: ['two'] },
+        ],
       },
       { id: 'e2e-group', kind: 'group', label: 'Group' },
       { id: 'e2e-child', kind: 'task', label: 'Child', parent: 'e2e-group' },
@@ -575,16 +628,17 @@ test('Node-only: exportDiagram keeps the content and adds geometry (AC11)', asyn
   const diagram = fixtureDiagram();
   const before = structuredClone(diagram);
 
-  const exported = versions.exportDiagram(diagram, flowNodes(40));
+  const exported = versions.exportDiagram(diagram, flowNodes(40), { 'e2e-leaf': ['notes'] });
 
   // Content untouched by the export.
   expect(exported.meta).toEqual(diagram.meta);
   expect(exported.direction).toBe('LR');
   expect(exported.specVersion).toBe('1');
   expect(exported.edges).toEqual(diagram.edges);
-  expect(exported.nodes.find((node) => node.id === 'e2e-leaf')?.sections).toEqual(
-    diagram.nodes.find((node) => node.id === 'e2e-leaf')?.sections,
-  );
+  expect(exported.nodes.find((node) => node.id === 'e2e-leaf')?.sections).toEqual([
+    { id: 'details', label: 'Details', open: false, items: ['one'] },
+    { id: 'notes', label: 'Notes', open: true, items: ['two'] },
+  ]);
 
   // Geometry added: leaf width only, container width + height.
   const leaf = exported.nodes.find((node) => node.id === 'e2e-leaf');
@@ -601,6 +655,33 @@ test('Node-only: exportDiagram keeps the content and adds geometry (AC11)', asyn
   );
   expect(parsed?.id).toBe(FIXTURE_ID);
   expect(parsed?.nodes.find((node) => node.id === 'e2e-leaf')?.position).toEqual({ x: 40, y: 60 });
+});
+
+test('Node-only: a version records expanded sections and applies them back (AC10)', async () => {
+  const versions = await loadVersions();
+  const diagram = fixtureDiagram();
+
+  // The file has `details` open; the reader collapsed it and opened `notes`.
+  const version = versions.serializeVersion(diagram, flowNodes(40), { 'e2e-leaf': ['notes'] });
+  expect(leafOf(version).open).toEqual(['notes']);
+
+  // A node with no sections records nothing.
+  expect(version.nodes.find((node) => node.id === 'e2e-child')?.open).toBeUndefined();
+
+  const merged = versions.mergeGeometry(diagram, version);
+  const leaf = merged.nodes.find((node) => node.id === 'e2e-leaf');
+  expect(leaf?.sections).toEqual([
+    { id: 'details', label: 'Details', open: false, items: ['one'] },
+    { id: 'notes', label: 'Notes', open: true, items: ['two'] },
+  ]);
+
+  // "Everything collapsed" is a recorded state, not "no state".
+  const collapsed = versions.serializeVersion(diagram, flowNodes(40), { 'e2e-leaf': [] });
+  expect(leafOf(collapsed).open).toEqual([]);
+  expect(versions.mergeGeometry(diagram, collapsed).nodes[0].sections?.every((s) => s.open === false)).toBe(true);
+
+  // Immutable: the authored diagram keeps its own flags.
+  expect(diagram.nodes[0].sections?.[0].open).toBe(true);
 });
 
 test('Node-only: a storage failure degrades instead of throwing (AC2/AC9)', async () => {

@@ -37,6 +37,8 @@ import {
   writeVersion,
   type LayoutVersion,
 } from './lib/versions';
+import { SectionsContext } from './nodes/SectionsContext';
+import { withSectionToggle, type SectionState } from './lib/sections';
 import { nodeTypes } from './nodes/registry';
 import { BUDGET, type Size } from './lib/schema';
 import { kindMeta } from './lib/kinds';
@@ -84,6 +86,17 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   // the layout effect below does not re-run every render. No version (or a
   // geometry-less version) keeps the original identity and the exact old path.
   const [version, setVersion] = useState<LayoutVersion | null>(() => loadVersion(loaded.id));
+  // Live section expansion. Seeded empty: the authored flags (or the version's
+  // recorded `open` list, merged into the diagram) are the fallback until a
+  // section is actually toggled.
+  const [sectionState, setSectionState] = useState<SectionState>({});
+  // The debounced save fires after the render that recorded the toggle, so it
+  // reads the expansion state from a ref rather than a stale closure.
+  const sectionStateRef = useRef<SectionState>(sectionState);
+  const applySectionState = useCallback((next: SectionState) => {
+    sectionStateRef.current = next;
+    setSectionState(next);
+  }, []);
   const [hasSaved, setHasSaved] = useState(() => hasGeometry(loadVersion(loaded.id)));
   // Failures only: a successful save/export is silent (the user asked for the
   // status row and its reserved space to go away). The message is an overlay, so
@@ -173,21 +186,24 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
       saveTimer.current = null;
     }
     settled.current = false;
+    applySectionState({});
     setVersion(next);
     setReady(false);
     setLayoutEpoch((n) => n + 1);
-  }, []);
+  }, [applySectionState]);
 
   const doSave = useCallback(() => {
-    if (!loaded.diagram || !ready) return;
-    const outcome = saveVersion(loaded.id, loaded.diagram, getNodes());
+    // Serialize from the *merged* diagram: its sections carry the recorded
+    // expansion state, so a drag after a reload cannot silently re-open sections.
+    if (!diagram || !ready) return;
+    const outcome = saveVersion(loaded.id, diagram, getNodes(), sectionStateRef.current);
     if (outcome.status === 'saved') {
       setHasSaved(true);
       setError(null);
     } else if (outcome.status === 'unavailable') {
       setError('Could not save locally: browser storage is unavailable. Use Download to export.');
     }
-  }, [getNodes, loaded.diagram, loaded.id, ready]);
+  }, [diagram, getNodes, loaded.id, ready]);
 
   /** Debounced so one drag or resize gesture persists once, after it ends. */
   const scheduleSave = useCallback(() => {
@@ -217,17 +233,38 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
 
   const handleDragStop = useCallback(() => scheduleSave(), [scheduleSave]);
 
+  /**
+   * Record one section toggle and persist it. Expanding also changes the node's
+   * measured size, which triggers the usual debounced save; going through the
+   * same path keeps a collapsed section from being missed.
+   */
+  const handleSectionToggle = useCallback(
+    (nodeId: string, sectionId: string, open: boolean) => {
+      const spec = diagram?.nodes.find((node) => node.id === nodeId);
+      if (!spec) return;
+      applySectionState(withSectionToggle(sectionStateRef.current, spec, sectionId, open));
+      scheduleSave();
+    },
+    [applySectionState, diagram, scheduleSave],
+  );
+
+  const sectionsApi = useMemo(
+    () => ({ state: sectionState, toggle: handleSectionToggle }),
+    [sectionState, handleSectionToggle],
+  );
+
   const handleDownload = useCallback(() => {
-    if (!loaded.diagram) return;
-    // The download is the whole diagram (content + geometry), not the compact
-    // storage envelope: it must be usable as a file in src/diagrams/.
-    const payload = exportDiagram(loaded.diagram, getNodes());
+    if (!diagram) return;
+    // The download is the whole diagram (content + geometry + expansion state),
+    // not the compact storage envelope: it must be usable as a file in
+    // src/diagrams/.
+    const payload = exportDiagram(diagram, getNodes(), sectionStateRef.current);
     if (!downloadVersion(loaded.id, payload)) {
       setError('No layout to download yet — move or resize a node first.');
       return;
     }
     setError(null);
-  }, [getNodes, loaded.diagram, loaded.id]);
+  }, [diagram, getNodes, loaded.id]);
 
   const handleUpload = useCallback(
     (file: File | undefined) => {
@@ -383,25 +420,27 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
 
         {diagram && ready && (
           <div className="canvas">
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeDragStop={handleDragStop}
-              nodesConnectable={false}
-              deleteKeyCode={null}
-              colorMode="system"
-              onlyRenderVisibleElements={nodes.length > BUDGET.nodes}
-              fitView
-              fitViewOptions={{ padding: 0.15 }}
-              minZoom={0.05}
-            >
-              <Background />
-              <Controls showInteractive={false} />
-              <MiniMap pannable zoomable />
-            </ReactFlow>
+            <SectionsContext.Provider value={sectionsApi}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={onEdgesChange}
+                onNodeDragStop={handleDragStop}
+                nodesConnectable={false}
+                deleteKeyCode={null}
+                colorMode="system"
+                onlyRenderVisibleElements={nodes.length > BUDGET.nodes}
+                fitView
+                fitViewOptions={{ padding: 0.15 }}
+                minZoom={0.05}
+              >
+                <Background />
+                <Controls showInteractive={false} />
+                <MiniMap pannable zoomable />
+              </ReactFlow>
+            </SectionsContext.Provider>
           </div>
         )}
 
