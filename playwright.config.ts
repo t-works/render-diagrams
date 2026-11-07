@@ -1,6 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = 'http://localhost:5173';
+// A dedicated port: 5173 is Vite's default and is routinely occupied by a
+// different checkout on this machine, which would make Playwright reuse that
+// app and test the wrong diagrams. `--strictPort` makes a clash fail loudly.
+const PORT = 5180;
+const baseURL = `http://localhost:${PORT}`;
 
 /**
  * Single-runner harness. `npm run fixtures` materializes the gitignored
@@ -28,7 +32,7 @@ export default defineConfig({
   webServer: {
     // Never a bare `tsx`: Playwright starts this with the project root as cwd,
     // and `npm run` puts node_modules/.bin on PATH for the fixtures step.
-    command: 'npm run fixtures && npm run dev',
+    command: `npm run fixtures && npm run dev -- --port ${PORT} --strictPort`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
