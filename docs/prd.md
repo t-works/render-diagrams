@@ -11,7 +11,7 @@
 | Diagram location | `src/diagrams/`. |
 | Discovery | Reload-time in dev, bundle-time in prod (§5.1). |
 | Topbar | **Flat**, sorted by `order`; `meta.group` not needed. |
-| Layout | **Automatic**. No coordinates in JSON at all (§5.3). |
+| Layout | **Automatic**. Authored JSON stays coordinate-free (§5.3); user adjustments persist separately as a saved layout version (user-layout-versions feature). |
 | `meta.description` | **Page-level**: what the diagram shows + legend (§5.2). |
 | Per-node detail | **Expandable sections inside the node** (§5.5). |
 | Node color | Optional named palette value; every kind has a default (§5.4). |
@@ -40,7 +40,7 @@ A React app that:
 
 ## 3. Non-goals (v1)
 
-- Authoring/editing diagrams in the UI.
+- Authoring/editing diagram **content** in the UI (adjusting node geometry and saving a layout version is in scope — see the user-layout-versions PRD).
 - Live connection-rule enforcement (rules are descriptive, not enforced).
 - Backend, auth, persistence, collaboration, external/remote diagram sources.
 - The "dive into sub-nodes" navigation from `docs/draft.md` — v2.
@@ -107,7 +107,9 @@ rendered with each kind's label + one-line `description` from the registry
 ### 5.3 Standard props (the schema)
 
 Every diagram file has this envelope. Only `meta.id`, `meta.title`, and `nodes`
-are required. **There are no coordinates in a diagram file.**
+are required. **Authored diagram content is coordinate-free**; a user's saved
+arrangement is a separate layout version keyed by diagram id and is not written
+into the authored file by the app.
 
 ```jsonc
 {
@@ -161,7 +163,9 @@ are required. **There are no coordinates in a diagram file.**
 - Every `parent`, `source`, `target`, `sourcePort`, `targetPort` resolves.
 - A parent node appears **before** its children (React Flow ordering).
 - `section.id` unique within a node.
-- `size` is an optional override; everything else is laid out by the app.
+- `size` is an optional override; `position` may be present on a saved layout
+  version but is never authored; everything not recorded is laid out by
+  the app.
 - A `group` sizes itself to its children unless `size` is given.
 
 **Defaults** — an omitted field is never an error:
@@ -179,10 +183,12 @@ A `color` that is not in the palette is a **warning**, not an error: the node
 renders with its kind's default color. Unknown colors must never block a
 render — a wrong shade is not worth an error page.
 
-Removing coordinates is deliberate: they were the single most likely thing for
-the agent to get wrong, and they are the one thing the renderer can compute
-better. `size` survives only because a `group` or `note` may need to be forced
-larger than its content — a genuinely rare, deliberate act.
+Keeping coordinates out of *authored* content is deliberate: they were the
+single most likely thing for the agent to get wrong, and they are the one thing
+the renderer can compute better. `size` survives only because a `group` or
+`note` may need to be forced larger than its content — a genuinely rare,
+deliberate act. User-set geometry is persisted separately as a saved layout
+version; the app never writes it back into the authored file.
 
 There is no free-form `props` bag: anything a node needs to show beyond its
 label is a `section`. Add a typed per-kind field only when a kind genuinely
@@ -338,7 +344,9 @@ skills/create-diagram-files/
 
 1. When to use the skill.
 2. Pointer to `references/schema.md` and `assets/` — not the whole schema inline.
-3. Rules: unique ids; parent-before-child; **no coordinates or sizes**; stay
+3. Rules: unique ids; parent-before-child; **no coordinates in authored content**
+   (only a deliberate `size` override; the app persists user geometry
+   separately); stay
    inside the §5.6 budget; use `sections` for detail rather than cramming text
    into `label`; color **only** from the palette and only where it carries
    meaning; short `meta.description`; one diagram per file.
