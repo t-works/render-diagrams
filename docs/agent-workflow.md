@@ -1,7 +1,7 @@
 # Multi-agent feature workflow
 
 How features are specified, planned, built, and verified in this repo using the
-`subagent` + `question` extensions and specialized agents (all project-level
+`isolated_subagent` + `question` extensions and specialized agents (all project-level
 under `.pi/`).
 
 ## Directory convention
@@ -39,10 +39,10 @@ All agents run with **isolated context** (fresh `pi -p --no-session`). Every
 handoff must be a file on disk or text in the task prompt — never conversation
 memory. That is why `STATE.md` and `runs/*.md` exist.
 
-Invoke via the `subagent` tool, e.g. a single step (note `agentScope`):
+Invoke via the `isolated_subagent` tool, e.g. a single step (note `agentScope`):
 
 ```
-subagent { agentScope: "both", agent: "us-analyst",
+isolated_subagent { agentScope: "both", agent: "us-analyst",
   task: "Feature dir: docs/features/... . User story: ... .
   Read docs/prd.md and the code. Write PRD.md." }
 ```
@@ -125,7 +125,7 @@ All workflow resources are project-level and committed with the repo:
 ```
 .pi/
   extensions/
-    subagent/       # subagent tool (spawns isolated pi processes)
+    isolated-subagent/  # isolated_subagent tool (spawns isolated pi processes)
       index.ts
       agents.ts
     question.ts     # single-question multiple-choice UI
@@ -136,14 +136,14 @@ No user-level (`~/.pi/agent/`) resources are required.
 
 ## Agent scope
 
-Agent definitions live in **`.pi/agents/`**. The `subagent` extension defaults
+Agent definitions live in **`.pi/agents/`**. The `isolated_subagent` extension defaults
 to `agentScope: "user"`, so every invocation MUST pass `agentScope: "both"`
 (or `"project"`) to find them. Project agents override same-named user agents.
 
 ## Project trust
 
 Project `.pi/` resources (both the extensions and the agents) load only after
-pi grants **project trust**. Without it, `subagent` and `question` do not exist
+pi grants **project trust**. Without it, `isolated_subagent` and `question` do not exist
 and no agent can run.
 
 - This machine: a trust decision for this repo is already saved in
