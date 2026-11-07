@@ -18,6 +18,23 @@ export interface Section {
   items?: string[];
 }
 
+/** A point in diagram model space (child coordinates are parent-relative). */
+export interface NodePosition {
+  x: number;
+  y: number;
+}
+
+/**
+ * A recorded node size. `width` is always recorded; `height` is recorded only
+ * for containers/groups (round-2 refinement) so leaves keep growing with their
+ * sections. `Size` (both required) is still used for kind defaults / ELK input.
+ */
+export interface NodeSize {
+  width: number;
+  height?: number;
+}
+
+/** A fully-resolved size — kind defaults, measured overrides and ELK input. */
 export interface Size {
   width: number;
   height: number;
@@ -29,7 +46,8 @@ export interface NodeSpec {
   label: string;
   color?: string;
   parent?: string;
-  size?: Size;
+  position?: NodePosition;
+  size?: NodeSize;
   inputs?: Port[];
   outputs?: Port[];
   sections?: Section[];

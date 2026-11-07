@@ -18,10 +18,15 @@ export function buildFlow(
   const nodes: Node[] = diagram.nodes.map((spec) => {
     const placement = placements.get(spec.id);
     const meta = kindMeta(spec.kind);
-    const width = placement?.width ?? spec.size?.width ?? meta.size.width;
-    const height = placement?.height ?? spec.size?.height ?? meta.size.height;
     const container = isContainer(spec);
-    const fixed = !!spec.size;
+    // Recorded geometry (a saved version) is authoritative over ELK placement.
+    const recordedWidth = spec.size?.width;
+    const recordedHeight = spec.size?.height;
+    const width = recordedWidth ?? placement?.width ?? meta.size.width;
+    const height = recordedHeight ?? placement?.height ?? meta.size.height;
+    // Round-2: only an explicit height makes a node fixed. A width-only leaf
+    // stays auto-height so an expanded section can grow it in place (§5.5).
+    const fixed = recordedHeight !== undefined;
     // Auto-height nodes omit height (min-height keeps the collapsed size exact) so an
     // expanded section can grow the node in place (§5.5).
     const style: CSSProperties = container || fixed ? { width, height } : { width, minHeight: height };
@@ -30,7 +35,12 @@ export function buildFlow(
     return {
       id: spec.id,
       type: container ? 'group' : isKnownKind(spec.kind) ? spec.kind : 'generic',
-      position: placement?.position ?? { x: 0, y: 0 },
+      position: spec.position ?? placement?.position ?? { x: 0, y: 0 },
+      // Set explicit React Flow dimensions only for recorded geometry: a set
+      // `node.height` is applied as a fixed inline height, so width-only leaves
+      // must leave it unset. No recorded size => byte-identical old output.
+      ...(recordedWidth !== undefined ? { width } : {}),
+      ...(recordedHeight !== undefined ? { height } : {}),
       style,
       data,
       connectable: false,

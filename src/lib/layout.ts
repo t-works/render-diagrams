@@ -17,7 +17,13 @@ const elk = new ELK();
 const GROUP_PADDING = '[top=34,left=12,bottom=12,right=12]';
 
 function sizeOf(node: NodeSpec): Size {
-  return node.size ?? kindMeta(node.kind).size;
+  const fallback = kindMeta(node.kind).size;
+  // A recorded width-only `size` (leaf round-2) must still hand ELK a numeric
+  // height, so fill the kind default rather than passing `undefined`.
+  return {
+    width: node.size?.width ?? fallback.width,
+    height: node.size?.height ?? fallback.height,
+  };
 }
 
 export async function layoutDiagram(

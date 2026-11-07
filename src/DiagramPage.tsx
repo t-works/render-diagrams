@@ -16,6 +16,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { layoutDiagram } from './lib/layout';
 import { buildFlow } from './lib/flow';
+import { hasGeometry, loadVersion, mergeGeometry } from './lib/versions';
 import { nodeTypes } from './nodes/registry';
 import { BUDGET, type Size } from './lib/schema';
 import { kindMeta } from './lib/kinds';
@@ -43,7 +44,27 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   const nodesInitialized = useNodesInitialized();
   const settled = useRef(false);
 
-  const diagram = loaded.diagram;
+  // Load a saved version once per diagram id and merge it once per loaded
+  // diagram + version identity, so the merged `diagram` object stays stable and
+  // the layout effect below does not re-run every render. No version (or a
+  // geometry-less version) keeps the original identity and the exact old path.
+  const version = useMemo(() => loadVersion(loaded.id), [loaded.id]);
+  const diagram = useMemo(() => {
+    if (!loaded.diagram || !version || !hasGeometry(version)) return loaded.diagram;
+    return mergeGeometry(loaded.diagram, version);
+  }, [loaded.diagram, version]);
+
+  // Run 1 surfaces partial coverage / stale ids as a log; Run 3 promotes this to
+  // a non-blocking aria-live notice (AC8).
+  useEffect(() => {
+    if (!version || !loaded.diagram) return;
+    const knownIds = new Set(loaded.diagram.nodes.map((n) => n.id));
+    const recordedIds = new Set(version.nodes.map((n) => n.id));
+    const unknown = version.nodes.filter((n) => !knownIds.has(n.id)).length;
+    const uncovered = loaded.diagram.nodes.filter((n) => !recordedIds.has(n.id)).length;
+    if (unknown > 0) console.info(`Layout version “${loaded.id}”: ignored ${unknown} unknown node id(s).`);
+    if (uncovered > 0) console.info(`Layout version “${loaded.id}”: ${uncovered} node(s) keep auto-layout (partial coverage).`);
+  }, [version, loaded.id, loaded.diagram]);
 
   useEffect(() => {
     if (!diagram) return;
