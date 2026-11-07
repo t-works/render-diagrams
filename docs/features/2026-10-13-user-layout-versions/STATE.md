@@ -4,7 +4,7 @@ Feature dir: `docs/features/2026-10-13-user-layout-versions/`
 Process: `docs/agent-workflow.md`
 
 ## Phase
-`implementation` — plan frozen (2026-10-13)
+`implementation` — Run 2 complete, Run 3 pending (plan frozen 2026-10-13)
 
 ## Open questions round
 2 of 2 — all original questions + spike/plan-review questions answered (PRD §10)
@@ -15,7 +15,7 @@ Plan review: APPROVE WITH CHANGES, loop 2; 6 non-blocking findings applied.
 |---|---|---|---|
 | 0 | Test harness bootstrap + reproducible e2e fixture + gate repair | COMPLETE | run-reviewer: COMPLETE WITH FOLLOW-UPS |
 | 1 | Schema + geometry-preferred pipeline + apply/read path | COMPLETE | run-reviewer: COMPLETE |
-| 2 | Save / Download / Upload / Reset + persistence + feedback | pending | - |
+| 2 | Save / Download / Upload / Reset + persistence + feedback | COMPLETE | review pending |
 | 3 | Robustness, edge states, section behavior | pending | - |
 
 ## Decisions log
@@ -52,3 +52,12 @@ Plan review: APPROVE WITH CHANGES, loop 2; 6 non-blocking findings applied.
   Run 2: `src/lib/validate.ts` still requires `size.height` until Run 2 relaxes
   it; authored two-field `size` now also emits `node.width`/`node.height`
   (intended, no in-repo trigger).
+- Run 2 executed 2026-10-13: `versions.ts` write/clear/download/upload accessors,
+  optional `size.height` + `position` in both validators, autosave on drag/resize
+  end (400 ms debounce, measurement-only `dimensions` changes ignored), toolbar
+  Download/Upload/Reset with an aria-live status line, and Reset replacing
+  Re-layout only while a version exists. Builder finding: Reset on an
+  autosave-only session had no applied version, so the layout effect never
+  re-ran — fixed with an explicit `layoutEpoch` trigger rather than relying on
+  `diagram` identity. `npx tsc -b`, `npx oxlint`, `npm run validate`,
+  `npm run e2e` (25 passed / 1 skipped) all green.
