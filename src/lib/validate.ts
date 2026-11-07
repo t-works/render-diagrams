@@ -106,7 +106,20 @@ export function validateDiagram(input: unknown, opts: ValidateOptions = {}): Val
       else {
         const { width, height } = raw.size;
         if (typeof width !== 'number' || width <= 0) err(`${at}.size.width: must be a positive number.`);
-        if (typeof height !== 'number' || height <= 0) err(`${at}.size.height: must be a positive number.`);
+        // Height is recorded for containers only; a width-only leaf leaves it out.
+        if (height !== undefined && (typeof height !== 'number' || height <= 0)) {
+          err(`${at}.size.height: must be a positive number when present.`);
+        }
+      }
+    }
+
+    if (raw.position !== undefined) {
+      if (!isObj(raw.position)) err(`${at}.position: must be an object.`);
+      else {
+        const { x, y } = raw.position;
+        if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+          err(`${at}.position: must be { x: number, y: number } with finite values.`);
+        }
       }
     }
 

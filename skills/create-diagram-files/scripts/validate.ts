@@ -104,7 +104,22 @@ export function validateDiagram(input: unknown, knownIds?: ReadonlySet<string>):
       else {
         const { width, height } = raw.size;
         if (typeof width !== 'number' || width <= 0) err(`${at}.size.width: must be a positive number.`);
-        if (typeof height !== 'number' || height <= 0) err(`${at}.size.height: must be a positive number.`);
+        // Recorded layouts keep a leaf width-only; only containers carry a height.
+        if (height !== undefined && (typeof height !== 'number' || height <= 0)) {
+          err(`${at}.size.height: must be a positive number when present.`);
+        }
+      }
+    }
+
+    // `position` is written by the app into a saved layout version; it is never
+    // authored, but an exported `<id>.json` must still pass the same checks.
+    if (raw.position !== undefined) {
+      if (!isObj(raw.position)) err(`${at}.position: must be an object.`);
+      else {
+        const { x, y } = raw.position;
+        if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+          err(`${at}.position: must be { x: number, y: number } with finite values.`);
+        }
       }
     }
 
@@ -307,6 +322,25 @@ if (process.argv[2] === '--self-test') {
   }, new Set(['not url safe!']));
   assert(bad.errors.length >= 5, `expected several errors, got ${bad.errors.length}`);
   assert(bad.warnings.length === 2, `expected 2 warnings, got ${JSON.stringify(bad.warnings)}`);
+
+  // Recorded geometry: a position plus a width-only `size` is valid (a leaf).
+  const recorded = validateDiagram({
+    meta: { id: 'recorded', title: 'Recorded' },
+    nodes: [
+      { id: 'a', kind: 'task', label: 'A', position: { x: 12, y: 34 }, size: { width: 200 } },
+      { id: 'g', kind: 'group', label: 'G', position: { x: 0, y: 0 }, size: { width: 300, height: 240 } },
+    ],
+  });
+  assert(recorded.errors.length === 0, `recorded layout reported ${JSON.stringify(recorded.errors)}`);
+
+  const badGeometry = validateDiagram({
+    meta: { id: 'bad-geometry', title: 'Bad geometry' },
+    nodes: [
+      { id: 'a', kind: 'task', label: 'A', position: { x: '12', y: 34 } },
+      { id: 'b', kind: 'task', label: 'B', position: { x: 1, y: 2 }, size: { width: 100, height: 0 } },
+    ],
+  });
+  assert(badGeometry.errors.length === 2, `bad geometry reported ${JSON.stringify(badGeometry.errors)}`);
   console.log('self-test ok');
 } else {
   main();
