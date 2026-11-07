@@ -12,7 +12,7 @@
 | Discovery | Reload-time in dev, bundle-time in prod (§5.1). |
 | Topbar | **Flat**, sorted by `order`; `meta.group` not needed. |
 | Layout | **Automatic**. Authored JSON stays coordinate-free (§5.3); user adjustments persist separately as a saved layout version (user-layout-versions feature). |
-| `meta.description` | **Page-level**: what the diagram shows + legend (§5.2). |
+| `meta.description` | **Page-level**: what the diagram shows + legend, in the left info drawer (§5.2). |
 | Per-node detail | **Expandable sections inside the node** (§5.5). |
 | Node color | Optional named palette value; every kind has a default (§5.4). |
 | Node budget | ≤ 300 nodes comfortable; > 1000 out of scope (§5.6). |
@@ -95,10 +95,16 @@ that workflow. Not doing this unless the deploy story demands it.
 
 **Topbar** = a flat list derived from the `meta` block of every loaded diagram,
 sorted by `order` then `title`. No hand-maintained nav list — that is the whole
-point of the "standard prop" requirement.
+point of the "standard prop" requirement. Its right end holds an **info**
+button and a **hamburger** menu: the menu carries the diagram actions
+(Re-layout/Reset, Download, Upload), so no action button sits in the page body.
 
-**Page header** = `meta.title` + `meta.description`. The description is the
-page-level explanation of what the diagram shows, and doubles as the legend.
+**Page header** = `meta.title` only.
+
+**Info drawer** = `meta.description` plus the auto-derived legend, in a panel
+that slides in from the left and overlays the diagram area (opening it never
+reflows the canvas). Dismissed with Escape, its close button, or a click on the
+diagram.
 
 **Legend** = auto-derived: the set of `kind`s actually present in the diagram,
 rendered with each kind's label + one-line `description` from the registry
@@ -118,7 +124,7 @@ into the authored file by the app.
     "id": "preprocess-pipeline",   // required, unique, URL-safe
     "title": "Preprocess Pipeline",// required, shown in topbar
     "order": 10,                   // optional topbar sort key
-    "description": "How raw data becomes training tensors."  // page header / legend
+    "description": "How raw data becomes training tensors."  // info drawer / legend
   },
   "direction": "LR",               // "LR" | "TB" (auto-layout direction)
   "nodes": [
@@ -361,8 +367,8 @@ skills/create-diagram-files/
     skills/create-diagram-files/   # portable agent skill (see §5.8)
     src/
       App.tsx            # router + layout
-      Topbar.tsx         # derived from diagram metas
-      DiagramPage.tsx    # header + description/legend + ReactFlow + error panel
+      Topbar.tsx         # derived from diagram metas + action slots
+      DiagramPage.tsx    # title + ReactFlow + topbar menu/info drawer + error panel
       loader.ts          # glob + parse + validate + sort
       lib/schema.ts      # types shared by loader / validator / registry
       lib/validate.ts    # shared checker (also run from CLI)

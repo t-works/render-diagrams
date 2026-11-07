@@ -52,17 +52,21 @@ resize nodes, the arrangement is **autosaved** to `localStorage` under
 reload or navigating away and back restores what you arranged. Each version is
 scoped to one diagram id; other diagrams keep their own auto-layout.
 
+The actions live in the topbar's hamburger menu at the right end of the navbar;
+the diagram description and kind legend live in the info panel that slides in
+from the left and overlays the diagram. Nothing takes space away from the canvas.
+
 | Action | Behavior |
 |---|---|
 | Drag / resize | Debounced autosave; a live status line confirms it. |
 | **Download** | Exports the current geometry as `<id>.json` (portable, commitable). |
 | **Upload** | Re-applies an exported `<id>.json`; a file for another diagram is refused. |
-| **Reset layout** | Confirms, deletes the stored version, and re-runs ELK auto-layout. |
+| **Reset layout** | Confirms in the menu, deletes the stored version, and re-runs ELK auto-layout. |
 
 Recorded geometry is positions plus width for every node and height only for
 containers/groups, so a saved leaf keeps growing when its sections expand. With
-no saved version the page behaves exactly as before and the original **Re-layout**
-button is shown instead of **Reset layout**.
+no saved version the page behaves exactly as before and the original
+**Re-layout** item is shown in the menu instead of **Reset layout**.
 
 ## Adding a diagram
 
