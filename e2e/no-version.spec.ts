@@ -69,6 +69,12 @@ async function openFixture(page: Page): Promise<void> {
   await page.waitForTimeout(500);
 }
 
+/** The layout actions live in the topbar menu; open it before clicking one. */
+async function openActions(page: Page): Promise<void> {
+  await page.getByTestId('actions-toggle').click();
+  await expect(page.getByTestId('actions-menu')).toBeVisible();
+}
+
 async function storedVersionKeys(page: Page): Promise<string[]> {
   return page.evaluate((prefix: string) => {
     const keys: string[] = [];
@@ -112,15 +118,18 @@ test('Re-layout still works and is repeatable (AC6)', async ({ page }) => {
   await openFixture(page);
   await waitForStableGeometry(page);
 
-  const relayout = page.getByRole('button', { name: 'Re-layout' });
+  await openActions(page);
+  const relayout = page.getByRole('menuitem', { name: 'Re-layout' });
   await expect(relayout).toBeEnabled();
 
   await relayout.click();
   await waitForStableGeometry(page);
   await expect(page.locator('.react-flow__node[data-id]')).toHaveCount(7);
 
+  await openActions(page);
   await relayout.click();
   const afterFirst = await waitForStableGeometry(page);
+  await openActions(page);
   await relayout.click();
   const afterSecond = await waitForStableGeometry(page);
 

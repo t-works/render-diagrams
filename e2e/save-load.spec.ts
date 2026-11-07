@@ -118,8 +118,13 @@ async function openFixture(page: Page): Promise<void> {
   await waitForStableGeometry(page);
 }
 
-async function storedVersion(page: Page): Promise<SavedVersion | null> {
-  return page.evaluate((key) => {
+/** Layout actions live in the topbar menu; open it before clicking one. */
+async function openActions(page: Page): Promise<void> {
+  await page.getByTestId('actions-toggle').click();
+  await expect(page.getByTestId('actions-menu')).toBeVisible();
+}
+
+async function storedVersion(page: Page): Promise<SavedVersion | null> {  return page.evaluate((key) => {
     const raw = window.localStorage.getItem(key);
     if (raw === null) return null;
     try {
@@ -257,22 +262,24 @@ test('Reset confirms, clears the version, and restores auto-layout (AC7/AC9)', a
   expect(dragged.x).not.toBeCloseTo(baseline.x, 0);
 
   // The version exists, so the destructive action is offered (and confirms).
+  await openActions(page);
   const reset = page.getByTestId('reset');
   await expect(reset).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Re-layout' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Re-layout' })).toHaveCount(0);
 
   await reset.click();
   await expect(page.getByTestId('reset-confirm')).toBeVisible();
 
-  // Cancel leaves everything untouched.
+  // Cancel leaves everything untouched and keeps the menu (and focus) usable.
   await page.getByTestId('reset-cancel').click();
   await expect(page.getByTestId('reset-confirm')).toHaveCount(0);
+  await expect(page.getByTestId('reset')).toBeFocused();
   expect(leafOf((await expectSaved(page))).position?.x).toBeCloseTo(
     leafOf(saved).position!.x,
     1,
   );
 
-  await reset.click();
+  await page.getByTestId('reset').click();
   await page.getByTestId('reset-confirm').click();
   await expect(status).toContainText('back to auto-layout');
   await expect.poll(() => storedVersion(page), { timeout: 5_000 }).toBeNull();
@@ -286,7 +293,9 @@ test('Reset confirms, clears the version, and restores auto-layout (AC7/AC9)', a
   expect(Math.abs(afterReset.x - dragged.x)).toBeGreaterThan(40);
 
   // Re-layout is offered again and storage stays empty after a reload.
-  await expect(page.getByRole('button', { name: 'Re-layout' })).toBeVisible();
+  await openActions(page);
+  await expect(page.getByRole('menuitem', { name: 'Re-layout' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.locator('.react-flow__node[data-id="e2e-leaf"]')).toBeVisible();
   await waitForStableGeometry(page);
@@ -301,13 +310,17 @@ test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page 
   const saved = await expectSaved(page);
   const expected = leafOf(saved).position!;
 
+  await openActions(page);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download').click()]);
   expect(download.suggestedFilename()).toBe(`${FIXTURE_ID}.json`);
   const filePath = await download.path();
   expect(filePath).not.toBeNull();
   await expect(status).toContainText(`Downloaded ${FIXTURE_ID}.json`);
 
-  // Reset back to auto-layout, then re-apply the exported artifact.
+  // Reset back to auto-layout, then re-apply the exported artifact through the
+  // menu's Upload item (the hidden input is page-level, so the picker survives
+  // the menu closing).
+  await openActions(page);
   await page.getByTestId('reset').click();
   await page.getByTestId('reset-confirm').click();
   await expect.poll(() => storedVersion(page), { timeout: 5_000 }).toBeNull();
@@ -315,7 +328,9 @@ test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page 
     .poll(async () => (await readNode(page, 'e2e-leaf')).x, { timeout: 10_000 })
     .not.toBeCloseTo(expected.x, 1);
 
-  await page.getByTestId('upload-input').setInputFiles(filePath!);
+  await openActions(page);
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('upload').click()]);
+  await chooser.setFiles(filePath!);
   await expect(status).toContainText('Applied layout');
   await expect
     .poll(async () => (await readNode(page, 'e2e-leaf')).x, { timeout: 10_000 })
@@ -351,7 +366,8 @@ test('a version stored for another diagram id is ignored (AC5)', async ({ page }
   expect(await storedVersion(page)).toBeNull();
   expect(await page.evaluate((key) => window.localStorage.getItem(key), FOREIGN_KEY)).not.toBeNull();
   expect(Math.abs(leaf.x - 40) > 1 || Math.abs(leaf.y - 60) > 1).toBe(true);
-  await expect(page.getByRole('button', { name: 'Re-layout' })).toBeVisible();
+  await openActions(page);
+  await expect(page.getByRole('menuitem', { name: 'Re-layout' })).toBeVisible();
 });
 
 test('Uploading a layout for another diagram is refused (AC5/AC11)', async ({ page }) => {
@@ -381,14 +397,32 @@ test('controls are keyboard reachable and the status region is live (AC10)', asy
   await expect(status).toHaveAttribute('aria-live', 'polite');
   await expect(status).toHaveAttribute('role', 'status');
 
-  for (const name of ['Re-layout', 'Download', 'Upload']) {
-    const control = page.getByRole('button', { name });
-    await control.focus();
-    await expect(control).toBeFocused();
-  }
+  // The triggers are focusable; opening with the keyboard moves focus into the
+  // menu, ArrowDown walks it, and Escape returns focus to the trigger.
+  const toggle = page.getByTestId('actions-toggle');
+  await toggle.focus();
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('download')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('upload')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Re-layout' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('actions-menu')).toHaveCount(0);
+  await expect(toggle).toBeFocused();
+
+  const info = page.getByTestId('info-toggle');
+  await info.focus();
+  await expect(info).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('info-close')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(info).toBeFocused();
 
   // Download with nothing adjusted exports the current auto-layout rather than
   // failing: the confirmation is visible (AC10).
+  await openActions(page);
   await page.getByTestId('download').click();
   await expect(status).toContainText(`Downloaded ${FIXTURE_ID}.json`);
 
@@ -397,9 +431,10 @@ test('controls are keyboard reachable and the status region is live (AC10)', asy
   expect(leafOf(saved).position).toBeDefined();
 
   // The destructive control confirms first and moves focus deliberately.
+  await openActions(page);
   await page.getByTestId('reset').focus();
   await expect(page.getByTestId('reset')).toBeFocused();
-  await page.getByTestId('reset').click();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('reset-confirm')).toBeFocused();
   await page.getByTestId('reset-cancel').click();
   await expect(page.getByTestId('reset')).toBeFocused();

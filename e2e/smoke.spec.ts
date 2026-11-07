@@ -21,7 +21,10 @@ test.describe('smoke', () => {
 
     await expect(page.locator('.canvas')).toBeVisible();
     await expect(page.locator('.react-flow')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Re-layout' })).toBeEnabled();
+
+    // Action buttons live in the topbar menu now.
+    await page.getByTestId('actions-toggle').click();
+    await expect(page.getByRole('menuitem', { name: 'Re-layout' })).toBeEnabled();
 
     // Never assert a global count: only that this fixture rendered its own nodes.
     await expect(page.locator('.react-flow__node[data-id]').first()).toBeVisible();
