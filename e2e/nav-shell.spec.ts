@@ -57,12 +57,16 @@ test('triggers sit at the right end of the topbar and the page body has no actio
   expect(actions.x).toBeGreaterThan(info.x + info.width - 1);
   expect(actions.x + actions.width).toBeGreaterThan(topbar.x + topbar.width - 80);
 
-  // No action button and no legend left in the page body.
+  // No action button and no page header left in the body.
   await expect(page.getByRole('button', { name: 'Download' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Upload' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Re-layout' })).toHaveCount(0);
-  await expect(page.locator('.page__header .legend')).toHaveCount(0);
-  await expect(page.locator('.page__header .page__description')).toHaveCount(0);
+  await expect(page.locator('.page__header')).toHaveCount(0);
+
+  // The info trigger is a labeled control, not an icon-only button.
+  await expect(page.getByRole('button', { name: 'Info' })).toBeVisible();
+  const heading = await page.locator('h1').evaluate((el) => ({ srOnly: el.classList.contains('sr-only'), text: el.textContent }));
+  expect(heading).toEqual({ srOnly: true, text: 'E2E Layout Fixture' });
 
   // The info trigger and the actions trigger are both reachable.
   await page.getByTestId('info-toggle').focus();
@@ -101,7 +105,7 @@ test('the menu holds Download, Upload and Re-layout, and Escape returns focus (A
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('description and legend live in the drawer, hidden and inert while closed (AC3)', async ({ page }) => {
+test('title, description and legend live in the drawer, hidden and inert while closed (AC3)', async ({ page }) => {
   await openFixture(page);
   const drawer = page.getByTestId('info-drawer');
   const toggle = page.getByTestId('info-toggle');
@@ -110,6 +114,7 @@ test('description and legend live in the drawer, hidden and inert while closed (
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(drawer).toHaveAttribute('aria-hidden', 'true');
   expect(await drawer.evaluate((el) => (el as HTMLElement).inert)).toBe(true);
+  await expect(page.locator('.drawer__diagram')).toHaveText('E2E Layout Fixture');
   await expect(page.locator('.drawer__description')).toHaveCount(1);
   await expect(page.locator('.drawer .legend__item')).toHaveCount(2);
 
@@ -117,6 +122,7 @@ test('description and legend live in the drawer, hidden and inert while closed (
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(drawer).toHaveAttribute('aria-hidden', 'false');
   expect(await drawer.evaluate((el) => (el as HTMLElement).inert)).toBe(false);
+  await expect(page.locator('.drawer__diagram')).toHaveText('E2E Layout Fixture');
   await expect(page.locator('.drawer__description')).toContainText('Deterministic fixture');
   await expect(page.getByTestId('info-close')).toBeFocused();
 

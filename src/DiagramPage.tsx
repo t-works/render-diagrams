@@ -360,9 +360,8 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
 
   return (
     <div className="page">
-      <div className="page__header">
-        <h1>{loaded.title}</h1>
-      </div>
+      {/* Always present for the document outline; the visible title lives in the drawer. */}
+      <h1 className="sr-only">{loaded.title}</h1>
 
       <p
         className={`layout-status${statusError ? ' layout-status--error' : ''}`}
@@ -432,7 +431,7 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
           data-testid="info-drawer"
         >
           <div className="drawer__bar">
-            <h2 className="drawer__title">Diagram information</h2>
+            <p className="drawer__diagram">{loaded.title}</p>
             <button
               ref={drawerClose}
               type="button"
@@ -489,8 +488,7 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
             <button
               ref={infoToggle}
               type="button"
-              className="icon-btn"
-              aria-label="Diagram information"
+              className="icon-btn icon-btn--label"
               aria-haspopup="dialog"
               aria-expanded={infoOpen}
               aria-controls="diagram-info"
@@ -502,6 +500,7 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 11v6M12 7.5h.01" />
               </svg>
+              <span>Info</span>
             </button>
 
             {diagram && (
