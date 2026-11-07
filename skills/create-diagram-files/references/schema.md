@@ -1,7 +1,9 @@
 # Diagram schema
 
 Every file is one diagram. Only `meta.id`, `meta.title` and `nodes` are required.
-**There are no coordinates.** Layout is automatic.
+**Authored content carries no coordinates.** Layout is automatic. The app may
+write a user's arrangement into a saved layout version (see “Recorded geometry”
+below), but it never writes it back into the authored file.
 
 ```jsonc
 {
@@ -20,7 +22,7 @@ Every file is one diagram. Only `meta.id`, `meta.title` and `nodes` are required
       "label": "Load",
       "color": "green",            // optional palette name
       "parent": "pre",             // optional -> nest inside a group node
-      "size": { "width": 140, "height": 64 },  // optional override; rarely needed
+      "size": { "width": 140 },   // optional override; width always, height only for containers
       "inputs": [{ "id": "in", "label": "raw" }],
       "outputs": [{ "id": "out", "label": "data" }],
       "sections": [                // optional expandable detail
@@ -49,6 +51,26 @@ Every file is one diagram. Only `meta.id`, `meta.title` and `nodes` are required
 }
 ```
 
+## Recorded geometry (saved layout versions)
+
+A saved layout version — kept in `localStorage` per diagram id, or exported as
+`<id>.json` — adds two optional fields to a node:
+
+```jsonc
+{
+  "id": "load",
+  "position": { "x": 40, "y": 60 },   // absolute for roots, parent-relative for children
+  "size": { "width": 220 }            // width always; height only for containers/groups
+}
+```
+
+- `position.x` / `position.y` must be finite numbers.
+- `size.width` must be a positive number; `size.height` is optional and positive
+  when present. Leaving it out is the point for a leaf: an explicit height would
+  freeze the node so its expandable sections scroll instead of growing it.
+- Never author these by hand in `src/diagrams/`; they come from dragging or
+  resizing in the browser and Download.
+
 ## Invariants
 
 - `meta.id` unique across files; `node.id` unique within a file.
@@ -56,6 +78,8 @@ Every file is one diagram. Only `meta.id`, `meta.title` and `nodes` are required
 - A parent node appears **before** its children (React Flow ordering).
 - `section.id` unique within a node.
 - A `group` sizes itself to its children unless `size` is given.
+- `position` is optional and only ever written by the app; a node without it is
+  placed by auto-layout.
 
 ## Defaults — an omitted field is never an error
 
@@ -66,6 +90,7 @@ Every file is one diagram. Only `meta.id`, `meta.title` and `nodes` are required
 | `section.open` | `false` |
 | `sourcePort` / `targetPort` | the node's first `output` / `input` |
 | `node.size` | the kind's default size |
+| `node.size.height` | auto (content-driven; containers derive it from children) |
 | `node.color` | the kind's default color |
 
 A `color` outside the palette is a **warning**: the node renders with its kind's
