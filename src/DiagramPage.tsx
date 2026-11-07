@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import {
   Background,
@@ -57,7 +65,18 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   const settled = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const primaryAction = useRef<HTMLButtonElement | null>(null);
+  const actionsToggle = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const infoToggle = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLElement | null>(null);
+  const drawerClose = useRef<HTMLButtonElement | null>(null);
+
+  // The topbar renders above the router, so the page's triggers are portaled
+  // into a slot the topbar owns (see Topbar.tsx). A DOM lookup needs the slot
+  // committed first, hence the effect plus one extra render on mount.
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
+  // oxlint-disable-next-line react/set-state-in-effect -- synchronizing with a DOM node owned by another component
+  useEffect(() => setTopbarSlot(document.getElementById('topbar-actions')), []);
 
   // The applied version is state (not a read-only memo) so Upload and Reset can
   // swap it without a reload. It is read once per diagram mount and merged once
@@ -69,6 +88,8 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   const [status, setStatus] = useState('');
   const [statusError, setStatusError] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   // A Reset/Upload must replay the pipeline even when the applied version was
   // already null (autosave-only session), where the `diagram` identity does not
   // change on its own. The epoch is the explicit "lay out again" trigger.
@@ -247,6 +268,7 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   const handleReset = useCallback(() => {
     const cleared = clearVersion(loaded.id);
     setConfirmingReset(false);
+    setMenuOpen(false);
     setHasSaved(false);
     applyVersion(null);
     setStatus(
@@ -255,9 +277,81 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
         : 'Auto-layout restored for this session — browser storage is unavailable.',
     );
     setStatusError(!cleared);
-    // The confirm button unmounts with the confirmation; keep focus in the toolbar.
-    requestAnimationFrame(() => primaryAction.current?.focus());
+    // The menu (and the confirm item) unmounts; keep focus on the trigger.
+    requestAnimationFrame(() => actionsToggle.current?.focus());
   }, [applyVersion, loaded.id]);
+
+  const closeMenu = useCallback((restoreFocus = false) => {
+    setMenuOpen(false);
+    // A stale confirmation must never greet the next open.
+    setConfirmingReset(false);
+    if (restoreFocus) requestAnimationFrame(() => actionsToggle.current?.focus());
+  }, []);
+
+  const closeInfo = useCallback((restoreFocus = false) => {
+    setInfoOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => infoToggle.current?.focus());
+  }, []);
+
+  // Escape closes the topmost surface; outside pointerdown dismisses too.
+  useEffect(() => {
+    if (!menuOpen && !infoOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      if (menuOpen) closeMenu(true);
+      else closeInfo(true);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as globalThis.Node;
+      if (menuOpen && !menuRef.current?.contains(target) && !actionsToggle.current?.contains(target)) {
+        closeMenu(false);
+      }
+      if (infoOpen && !drawerRef.current?.contains(target) && !infoToggle.current?.contains(target)) {
+        closeInfo(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [menuOpen, infoOpen, closeMenu, closeInfo]);
+
+  // Focus the first menu item on open, and the drawer's close button on open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const first = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+    first?.focus();
+  }, [menuOpen]);
+  useEffect(() => {
+    if (!infoOpen) return;
+    drawerClose.current?.focus();
+  }, [infoOpen]);
+
+  const moveMenuFocus = (e: ReactKeyboardEvent) => {
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? [],
+    );
+    if (items.length === 0) return;
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    let next: number | null = null;
+    if (e.key === 'ArrowDown') next = (index + 1) % items.length;
+    else if (e.key === 'ArrowUp') next = (index - 1 + items.length) % items.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = items.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    items[next].focus();
+  };
+
+  const openResetConfirm = () => {
+    setConfirmingReset(true);
+    requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLElement>('[data-testid="reset-confirm"]')?.focus();
+    });
+  };
 
   const kinds = useMemo(() => {
     const present = new Set((diagram?.nodes ?? []).map((n) => n.kind));
@@ -267,97 +361,7 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   return (
     <div className="page">
       <div className="page__header">
-        <div>
-          <h1>{loaded.title}</h1>
-          {loaded.description && <p className="page__description">{loaded.description}</p>}
-        </div>
-        <div className="page__actions">
-          {kinds.length > 0 && (
-            <ul className="legend">
-              {kinds.map((kind) => {
-                const meta = kindMeta(kind);
-                return (
-                  <li key={kind} className="legend__item">
-                    <span className={`legend__swatch kn-swatch--${meta.color}`} />
-                    <span className="legend__label">{meta.label}</span>
-                    <span className="legend__desc">{meta.description}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {diagram && (
-            <div className="layout-tools" role="group" aria-label="Layout">
-              {hasSaved ? (
-                confirmingReset ? (
-                  <span className="layout-tools__confirm" role="group" aria-label="Confirm reset">
-                    <span className="layout-tools__prompt">Clear saved layout?</span>
-                    <button
-                      type="button"
-                      className="btn btn--danger"
-                      onClick={handleReset}
-                      autoFocus
-                      data-testid="reset-confirm"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => {
-                        setConfirmingReset(false);
-                        requestAnimationFrame(() => primaryAction.current?.focus());
-                      }}
-                      data-testid="reset-cancel"
-                    >
-                      Cancel
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    ref={primaryAction}
-                    type="button"
-                    className="btn"
-                    onClick={() => setConfirmingReset(true)}
-                    data-testid="reset"
-                  >
-                    Reset layout
-                  </button>
-                )
-              ) : (
-                <button ref={primaryAction} type="button" className="btn" onClick={relayout} disabled={!ready}>
-                  Re-layout
-                </button>
-              )}
-              <button type="button" className="btn" onClick={handleDownload} disabled={!ready} data-testid="download">
-                Download
-              </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => fileInput.current?.click()}
-                disabled={!ready}
-                data-testid="upload"
-              >
-                Upload
-              </button>
-              <input
-                ref={fileInput}
-                className="layout-tools__file"
-                type="file"
-                accept="application/json,.json"
-                tabIndex={-1}
-                aria-hidden="true"
-                data-testid="upload-input"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = '';
-                  handleUpload(file);
-                }}
-              />
-            </div>
-          )}
-        </div>
+        <h1>{loaded.title}</h1>
       </div>
 
       <p
@@ -390,31 +394,241 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
         </div>
       )}
 
-      {diagram && !ready && <div className="panel">Laying out…</div>}
+      <div className="page__body">
+        {diagram && !ready && <div className="panel">Laying out…</div>}
 
-      {diagram && ready && (
-        <div className="canvas">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={onEdgesChange}
-            onNodeDragStop={handleDragStop}
-            nodesConnectable={false}
-            deleteKeyCode={null}
-            colorMode="system"
-            onlyRenderVisibleElements={nodes.length > BUDGET.nodes}
-            fitView
-            fitViewOptions={{ padding: 0.15 }}
-            minZoom={0.05}
-          >
-            <Background />
-            <Controls showInteractive={false} />
-            <MiniMap pannable zoomable />
-          </ReactFlow>
-        </div>
-      )}
+        {diagram && ready && (
+          <div className="canvas">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeDragStop={handleDragStop}
+              nodesConnectable={false}
+              deleteKeyCode={null}
+              colorMode="system"
+              onlyRenderVisibleElements={nodes.length > BUDGET.nodes}
+              fitView
+              fitViewOptions={{ padding: 0.15 }}
+              minZoom={0.05}
+            >
+              <Background />
+              <Controls showInteractive={false} />
+              <MiniMap pannable zoomable />
+            </ReactFlow>
+          </div>
+        )}
+
+        {/* Info drawer: an overlay over the diagram area, never a layout participant. */}
+        <aside
+          id="diagram-info"
+          ref={drawerRef}
+          className={`drawer${infoOpen ? ' is-open' : ''}`}
+          aria-label="Diagram information"
+          aria-hidden={!infoOpen}
+          inert={!infoOpen}
+          data-testid="info-drawer"
+        >
+          <div className="drawer__bar">
+            <h2 className="drawer__title">Diagram information</h2>
+            <button
+              ref={drawerClose}
+              type="button"
+              className="icon-btn"
+              aria-label="Close information panel"
+              onClick={() => closeInfo(true)}
+              data-testid="info-close"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          {loaded.description && <p className="drawer__description">{loaded.description}</p>}
+          {kinds.length > 0 && (
+            <ul className="legend">
+              {kinds.map((kind) => {
+                const meta = kindMeta(kind);
+                return (
+                  <li key={kind} className="legend__item">
+                    <span className={`legend__swatch kn-swatch--${meta.color}`} />
+                    <span className="legend__label">{meta.label}</span>
+                    <span className="legend__desc">{meta.description}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {!loaded.description && kinds.length === 0 && (
+            <p className="drawer__empty">No additional information for this diagram.</p>
+          )}
+        </aside>
+      </div>
+
+      {/* Mounted at page level so closing the menu cannot cancel a pending pick. */}
+      <input
+        ref={fileInput}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="upload-input"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          handleUpload(file);
+        }}
+      />
+
+      {topbarSlot &&
+        createPortal(
+          <div className="topbar__action-group">
+            <button
+              ref={infoToggle}
+              type="button"
+              className="icon-btn"
+              aria-label="Diagram information"
+              aria-haspopup="dialog"
+              aria-expanded={infoOpen}
+              aria-controls="diagram-info"
+              title="Diagram information"
+              onClick={() => (infoOpen ? closeInfo() : setInfoOpen(true))}
+              data-testid="info-toggle"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 11v6M12 7.5h.01" />
+              </svg>
+            </button>
+
+            {diagram && (
+              <div className="menu-wrap">
+                <button
+                  ref={actionsToggle}
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Diagram actions"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  aria-controls="diagram-actions-menu"
+                  title="Diagram actions"
+                  onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown' && !menuOpen) {
+                      e.preventDefault();
+                      setMenuOpen(true);
+                    }
+                  }}
+                  data-testid="actions-toggle"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                  </svg>
+                </button>
+
+                {menuOpen && (
+                  <div
+                    id="diagram-actions-menu"
+                    className="menu"
+                    role="menu"
+                    aria-label="Diagram actions"
+                    ref={menuRef}
+                    onKeyDown={moveMenuFocus}
+                    data-testid="actions-menu"
+                  >
+                    {confirmingReset ? (
+                      <>
+                        <p className="menu__prompt">Clear saved layout?</p>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="menu__item menu__item--danger"
+                          onClick={handleReset}
+                          data-testid="reset-confirm"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="menu__item"
+                          onClick={() => {
+                            setConfirmingReset(false);
+                            requestAnimationFrame(() => {
+                              menuRef.current?.querySelector<HTMLElement>('[data-testid="reset"]')?.focus();
+                            });
+                          }}
+                          data-testid="reset-cancel"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="menu__item"
+                          disabled={!ready}
+                          onClick={() => {
+                            closeMenu();
+                            handleDownload();
+                          }}
+                          data-testid="download"
+                        >
+                          Download
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="menu__item"
+                          disabled={!ready}
+                          onClick={() => {
+                            closeMenu();
+                            fileInput.current?.click();
+                          }}
+                          data-testid="upload"
+                        >
+                          Upload
+                        </button>
+                        <div className="menu__sep" role="separator" />
+                        {hasSaved ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="menu__item menu__item--danger"
+                            disabled={!ready}
+                            onClick={openResetConfirm}
+                            data-testid="reset"
+                          >
+                            Reset layout
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="menu__item"
+                            disabled={!ready}
+                            onClick={() => {
+                              closeMenu();
+                              relayout();
+                            }}
+                          >
+                            Re-layout
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>,
+          topbarSlot,
+        )}
     </div>
   );
 }

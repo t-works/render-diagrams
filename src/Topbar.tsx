@@ -19,6 +19,8 @@ export function Topbar({ diagrams }: { diagrams: LoadedDiagram[] }) {
           </NavLink>
         ))}
       </nav>
+      {/* Diagram page portals its actions/info triggers in here (see DiagramPage). */}
+      <div className="topbar__actions" id="topbar-actions" />
     </header>
   );
 }
