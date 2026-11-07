@@ -53,8 +53,11 @@ below), but it never writes it back into the authored file.
 
 ## Recorded geometry (saved layout versions)
 
-A saved layout version — kept in `localStorage` per diagram id, or exported as
-`<id>.json` — adds two optional fields to a node:
+An arranged layout is kept in `localStorage` per diagram id as a compact
+geometry record; **Download** exports the whole diagram with the geometry written
+into its nodes, so the file is a normal diagram you can commit to
+`src/diagrams/` or load back through Upload. Either form adds two optional
+fields to a node:
 
 ```jsonc
 {

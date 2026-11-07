@@ -61,6 +61,14 @@ Plan review: APPROVE WITH CHANGES, loop 2; 6 non-blocking findings applied.
   re-ran — fixed with an explicit `layoutEpoch` trigger rather than relying on
   `diagram` identity. `npx tsc -b`, `npx oxlint`, `npm run validate`,
   `npm run e2e` (25 passed / 1 skipped) all green.
+- Export defect fixed 2026-11-07: Download wrote the compact storage envelope
+  (`{ id, nodes: [{ id, position, size }] }`), dropping content, so the artifact
+  was not a usable diagram. It now exports the complete diagram via
+  `exportDiagram()` (content + `position`/`size`, rounded to 2 decimals) and
+  `downloadVersion()` writes the payload verbatim. Upload/`parseVersion` accept
+  both shapes (id from `id` or `meta.id`), so older exports still import. This
+  also aligns the artifact with decision 1 ("the diagram JSON with geometry
+  written in"). Covered by `save-load.spec.ts` (browser + Node-only cases).
 - Superseded (2026-11-07, feature `navbar-menu-info-drawer`): the visible
   "Layout saved" status row is removed at the user's request. Autosave success is
   silent; failures (storage unavailable, bad upload) remain as an overlay

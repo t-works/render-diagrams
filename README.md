@@ -62,8 +62,8 @@ the canvas, and there is no page header row.
 | Action | Behavior |
 |---|---|
 | Drag / resize | Debounced autosave (silent on success). |
-| **Download** | Exports the current geometry as `<id>.json` (portable, commitable). |
-| **Upload** | Re-applies an exported `<id>.json`; a file for another diagram is refused. |
+| **Download** | Exports the **complete diagram** (all content plus geometry) as `<id>.json` — drop it into `src/diagrams/` or load it back with Upload. |
+| **Upload** | Re-applies the geometry from an exported diagram or a stored-version envelope; a file for another diagram is refused. |
 | **Reset layout** | Confirms in the menu, deletes the stored version, and re-runs ELK auto-layout. |
 
 Recorded geometry is positions plus width for every node and height only for

@@ -46,6 +46,10 @@ Plan review: not run (single-run shell change, folded into the run's gates).
   1280x760), then moved the title into the drawer and gave the trigger a visible
   "Info" label; the page header is gone and a visually hidden `h1` keeps the
   outline. AC1/AC3 updated to assert the title and the labeled trigger.
+- Harness fix (same session): `playwright.config.ts` now runs on port 5180 with
+  `--strictPort` instead of reusing whatever app holds Vite's default 5173 (a
+  second checkout on this machine kept hijacking it, which silently tested the
+  wrong diagrams).
 - Second user feedback: remove the "Layout saved" status row and its reserved
   area. Success is now silent; failures keep a `role="alert"` notice positioned
   over the diagram (no layout space). This supersedes the visible-confirmation
