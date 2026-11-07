@@ -6,7 +6,7 @@
  * No project imports — this file carries the whole vocabulary and the checks, so
  * the skill can be dropped into any directory tree and run as-is.
  *
- *   npx tsx <this-file> [diagrams-dir]     # dir defaults to ./diagrams
+ *   npx tsx <this-file> [diagrams-dir]     # dir defaults to ./src/diagrams
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -229,7 +229,7 @@ export function validateDiagram(input: unknown, knownIds?: ReadonlySet<string>):
 
 // ---- CLI ----
 function main() {
-  const dir = resolve(process.cwd(), process.argv[2] ?? 'diagrams');
+  const dir = resolve(process.cwd(), process.argv[2] ?? 'src/diagrams');
 
   interface Entry {
     file: string;
