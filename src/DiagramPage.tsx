@@ -28,12 +28,12 @@ import { buildFlow } from './lib/flow';
 import {
   clearVersion,
   downloadVersion,
+  exportDiagram,
   hasGeometry,
   loadVersion,
   mergeGeometry,
   readUploadedVersion,
   saveVersion,
-  serializeVersion,
   writeVersion,
   type LayoutVersion,
 } from './lib/versions';
@@ -219,8 +219,10 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
 
   const handleDownload = useCallback(() => {
     if (!loaded.diagram) return;
-    const live = serializeVersion(loaded.diagram, getNodes());
-    if (!downloadVersion(loaded.id, live)) {
+    // The download is the whole diagram (content + geometry), not the compact
+    // storage envelope: it must be usable as a file in src/diagrams/.
+    const payload = exportDiagram(loaded.diagram, getNodes());
+    if (!downloadVersion(loaded.id, payload)) {
       setError('No layout to download yet — move or resize a node first.');
       return;
     }

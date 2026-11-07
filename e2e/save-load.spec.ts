@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -35,8 +35,17 @@ interface VersionsModule {
   writeVersion: (version: unknown) => boolean;
   clearVersion: (id: string) => boolean;
   readUploadedVersion: (file: File) => Promise<SavedVersion | null>;
-  downloadVersion: (id: string, version: unknown) => boolean;
+  downloadVersion: (id: string, payload: unknown) => boolean;
   serializeVersion: (diagram: unknown, nodes: unknown[]) => SavedVersion;
+  exportDiagram: (diagram: unknown, nodes: unknown[]) => ExportedDiagram;
+}
+
+/** The downloaded artifact: a complete, valid diagram with geometry added. */
+interface ExportedDiagram extends TestDiagram {
+  specVersion?: string;
+  direction?: string;
+  nodes: Array<TestSpecNode & { position?: { x: number; y: number }; size?: { width: number; height?: number } }>;
+  edges?: Array<Record<string, unknown>>;
 }
 
 type SaveOutcome =
@@ -57,12 +66,18 @@ interface TestSpecNode {
   kind: string;
   label: string;
   parent?: string;
+  color?: string;
+  inputs?: unknown[];
+  outputs?: unknown[];
+  sections?: Array<{ id: string; label: string; items?: string[] }>;
 }
 
 interface TestDiagram {
-  meta: { id: string; title: string };
+  specVersion?: string;
+  direction?: string;
+  meta: { id: string; title: string; description?: string };
   nodes: TestSpecNode[];
-  edges?: unknown[];
+  edges?: Array<Record<string, unknown>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +325,27 @@ test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page 
   const filePath = await download.path();
   expect(filePath).not.toBeNull();
 
+  // The download is the complete diagram, not just the geometry envelope: content,
+  // meta, direction and edges survive, and geometry is added on top.
+  const exported = JSON.parse(readFileSync(filePath!, 'utf8')) as ExportedDiagram;
+  expect(exported.meta.id).toBe(FIXTURE_ID);
+  expect(exported.meta.title).toBe('E2E Layout Fixture');
+  expect(exported.meta.description).toContain('Deterministic fixture');
+  expect(exported.specVersion).toBe('1');
+  expect(exported.direction).toBe('LR');
+  expect(exported.edges).toHaveLength(3);
+  expect(exported.nodes).toHaveLength(7);
+
+  const exportedLeaf = exported.nodes.find((node) => node.id === 'e2e-leaf');
+  expect(exportedLeaf?.label).toBe('Leaf with sections');
+  expect(exportedLeaf?.sections).toHaveLength(2);
+  expect(exportedLeaf?.position?.x).toBeCloseTo(expected.x, 1);
+  expect(exportedLeaf?.size?.width).toBeGreaterThan(0);
+  expect(exportedLeaf?.size?.height).toBeUndefined();
+
+  const exportedGroup = exported.nodes.find((node) => node.id === 'e2e-group');
+  expect(exportedGroup?.size?.height).toBeGreaterThan(0);
+
   // Reset back to auto-layout, then re-apply the exported artifact through the
   // menu's Upload item (the hidden input is page-level, so the picker survives
   // the menu closing).
@@ -464,13 +500,22 @@ async function loadVersions(): Promise<VersionsModule> {
 
 function fixtureDiagram(): TestDiagram {
   return {
-    meta: { id: FIXTURE_ID, title: 'Fixture' },
+    specVersion: '1',
+    direction: 'LR',
+    meta: { id: FIXTURE_ID, title: 'Fixture', description: 'Fixture description' },
     nodes: [
-      { id: 'e2e-leaf', kind: 'task', label: 'Leaf' },
+      {
+        id: 'e2e-leaf',
+        kind: 'task',
+        label: 'Leaf',
+        color: 'teal',
+        outputs: [{ id: 'out' }],
+        sections: [{ id: 'details', label: 'Details', items: ['one'] }],
+      },
       { id: 'e2e-group', kind: 'group', label: 'Group' },
       { id: 'e2e-child', kind: 'task', label: 'Child', parent: 'e2e-group' },
     ],
-    edges: [],
+    edges: [{ id: 'e1', source: 'e2e-leaf', target: 'e2e-child' }],
   };
 }
 
@@ -523,6 +568,39 @@ test('Node-only: saveVersion writes only its own key and replaces the earlier ve
 
   expect(versions.clearVersion(FIXTURE_ID)).toBe(true);
   expect(store.size).toBe(0);
+});
+
+test('Node-only: exportDiagram keeps the content and adds geometry (AC11)', async () => {
+  const versions = await loadVersions();
+  const diagram = fixtureDiagram();
+  const before = structuredClone(diagram);
+
+  const exported = versions.exportDiagram(diagram, flowNodes(40));
+
+  // Content untouched by the export.
+  expect(exported.meta).toEqual(diagram.meta);
+  expect(exported.direction).toBe('LR');
+  expect(exported.specVersion).toBe('1');
+  expect(exported.edges).toEqual(diagram.edges);
+  expect(exported.nodes.find((node) => node.id === 'e2e-leaf')?.sections).toEqual(
+    diagram.nodes.find((node) => node.id === 'e2e-leaf')?.sections,
+  );
+
+  // Geometry added: leaf width only, container width + height.
+  const leaf = exported.nodes.find((node) => node.id === 'e2e-leaf');
+  expect(leaf?.position).toEqual({ x: 40, y: 60 });
+  expect(leaf?.size).toEqual({ width: 220 });
+  expect(exported.nodes.find((node) => node.id === 'e2e-group')?.size).toEqual({ width: 260, height: 220 });
+
+  // Immutable: the authored diagram is not mutated.
+  expect(diagram).toEqual(before);
+
+  // The exported diagram re-imports (meta.id is the id source).
+  const parsed = await versions.readUploadedVersion(
+    new File([JSON.stringify(exported)], `${FIXTURE_ID}.json`, { type: 'application/json' }),
+  );
+  expect(parsed?.id).toBe(FIXTURE_ID);
+  expect(parsed?.nodes.find((node) => node.id === 'e2e-leaf')?.position).toEqual({ x: 40, y: 60 });
 });
 
 test('Node-only: a storage failure degrades instead of throwing (AC2/AC9)', async () => {

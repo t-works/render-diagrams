@@ -4,9 +4,12 @@
  * A "version" is a coordinate-bearing view of one diagram: `position` for every
  * recorded node and a `size` whose `width` is always present and whose `height`
  * is present only for containers/groups (round-2 refinement). It is persisted
- * to `localStorage` under a per-diagram key. This module holds the pure,
- * side-effect-free pieces plus the guarded storage, download and upload
- * accessors: unavailable, full or corrupt storage must never throw into a render.
+ * to `localStorage` under a per-diagram key as the compact `{ id, nodes }`
+ * envelope. The *downloaded* artifact is the complete diagram (content plus
+ * geometry), so it can be committed to `src/diagrams/` or re-imported; upload
+ * accepts both shapes. This module holds the pure, side-effect-free pieces plus
+ * the guarded storage, download and upload accessors: unavailable, full or
+ * corrupt storage must never throw into a render.
  */
 import type { Node } from '@xyflow/react';
 import type { Diagram, NodeSpec } from './schema';
@@ -32,14 +35,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
+/** Two decimals keep exported geometry readable without visible drift. */
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+
 /**
- * Pure shape check for a persisted version. Malformed entries are skipped
- * rather than throwing; an envelope that is not `{ id, nodes: [...] }` yields
- * `null` (the caller falls back to auto-layout, AC8).
+ * Pure shape check for a persisted version or an exported diagram. The id comes
+ * from `id` (the storage envelope) or `meta.id` (a complete diagram), so both
+ * shapes import. Malformed entries are skipped rather than throwing; unreadable
+ * input yields `null` (the caller falls back to auto-layout, AC8).
  */
 export function parseVersion(raw: unknown): LayoutVersion | null {
   if (!isRecord(raw)) return null;
-  if (typeof raw.id !== 'string' || raw.id === '') return null;
+  const id =
+    typeof raw.id === 'string' && raw.id !== ''
+      ? raw.id
+      : isRecord(raw.meta) && typeof raw.meta.id === 'string' && raw.meta.id !== ''
+        ? raw.meta.id
+        : null;
+  if (!id) return null;
   if (!Array.isArray(raw.nodes)) return null;
 
   const nodes: VersionNode[] = [];
@@ -65,7 +78,7 @@ export function parseVersion(raw: unknown): LayoutVersion | null {
     nodes.push(node);
   }
 
-  return { id: raw.id, nodes };
+  return { id, nodes };
 }
 
 /**
@@ -126,13 +139,15 @@ export function clearVersion(id: string): boolean {
 }
 
 /**
- * Download a version as a portable `<id>.json`. Returns false (and touches
- * nothing) when there is no geometry to export, so the caller can explain it.
+ * Download `<id>.json` verbatim. The payload is validated for geometry only
+ * (`parseVersion` reads both the storage envelope and a complete diagram) but
+ * written as given, so a full diagram export keeps all of its content. Returns
+ * false when there is nothing to export.
  */
-export function downloadVersion(id: string, version: unknown): boolean {
-  const parsed = parseVersion(version);
+export function downloadVersion(id: string, payload: unknown): boolean {
+  const parsed = parseVersion(payload);
   if (!parsed || !hasGeometry(parsed)) return false;
-  const body = `${JSON.stringify(parsed, null, 2)}\n`;
+  const body = `${JSON.stringify(payload, null, 2)}\n`;
   const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -210,12 +225,47 @@ export function serializeVersion(diagram: Diagram, nodes: readonly Node[]): Layo
 
     const entry: VersionNode = {
       id: node.id,
-      position: { x: node.position.x, y: node.position.y },
-      size: { width },
+      position: { x: round2(node.position.x), y: round2(node.position.y) },
+      size: { width: round2(width) },
     };
-    if (isContainerSpec(spec, childIds) && height !== undefined) entry.size!.height = height;
+    if (isContainerSpec(spec, childIds) && height !== undefined) entry.size!.height = round2(height);
     recorded.push(entry);
   }
 
   return { id: diagram.meta.id, nodes: recorded };
+}
+
+/**
+ * Build the portable export: the authored diagram with the live geometry written
+ * into every node, and nothing dropped. The result is a valid diagram file that
+ * can be committed to `src/diagrams/` or re-imported through Upload.
+ *
+ * Geometry follows the same rule as the stored version: position and width for
+ * every measured node, height only for containers/groups. Nodes without a live
+ * match (or without a measurable width) keep whatever the author wrote.
+ */
+export function exportDiagram(diagram: Diagram, nodes: readonly Node[]): Diagram {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const childIds = new Set(
+    diagram.nodes.map((spec) => spec.parent).filter((parent): parent is string => typeof parent === 'string'),
+  );
+
+  const exported: NodeSpec[] = diagram.nodes.map((spec) => {
+    const live = byId.get(spec.id);
+    const width = live ? (live.width ?? live.measured?.width) : undefined;
+    if (!live || width === undefined) return { ...spec };
+
+    const height = live.height ?? live.measured?.height;
+    const next: NodeSpec = {
+      ...spec,
+      position: { x: round2(live.position.x), y: round2(live.position.y) },
+      size: { width: round2(width) },
+    };
+    if (isContainerSpec(spec, childIds) && height !== undefined) {
+      next.size = { width: round2(width), height: round2(height) };
+    }
+    return next;
+  });
+
+  return { ...diagram, nodes: exported };
 }
