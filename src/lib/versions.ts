@@ -5,8 +5,8 @@
  * recorded node and a `size` whose `width` is always present and whose `height`
  * is present only for containers/groups (round-2 refinement). It is persisted
  * to `localStorage` under a per-diagram key. This module holds the pure,
- * side-effect-free pieces plus the guarded read accessor; the write/import side
- * (save/clear/download/upload) lands in Run 2.
+ * side-effect-free pieces plus the guarded storage, download and upload
+ * accessors: unavailable, full or corrupt storage must never throw into a render.
  */
 import type { Node } from '@xyflow/react';
 import type { Diagram, NodeSpec } from './schema';
@@ -77,6 +77,80 @@ export function loadVersion(id: string): LayoutVersion | null {
     const raw = window.localStorage.getItem(versionStorageKey(id));
     if (raw === null) return null;
     return parseVersion(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Guarded write of an already-parsed or raw envelope. Returns false when the
+ * shape is invalid or storage is unavailable/quota-exceeded; never throws.
+ */
+export function writeVersion(version: unknown): boolean {
+  const parsed = parseVersion(version);
+  if (!parsed) return false;
+  try {
+    window.localStorage.setItem(versionStorageKey(parsed.id), JSON.stringify(parsed));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type SaveOutcome =
+  | { status: 'saved'; version: LayoutVersion }
+  | { status: 'empty' }
+  | { status: 'unavailable' };
+
+/**
+ * Serialize the live node list and persist it for one diagram. A version with no
+ * geometry is not written (`empty`): the key stays absent so the load path keeps
+ * taking the untouched auto-layout branch. Re-saving replaces the old version.
+ */
+export function saveVersion(id: string, diagram: Diagram, nodes: readonly Node[]): SaveOutcome {
+  // The caller's id is authoritative for the storage key, so a version can never
+  // be written under a different diagram's key.
+  const version: LayoutVersion = { ...serializeVersion(diagram, nodes), id };
+  if (!hasGeometry(version)) return { status: 'empty' };
+  return writeVersion(version) ? { status: 'saved', version } : { status: 'unavailable' };
+}
+
+/** Guarded delete of one diagram's version. Returns false when storage is unavailable. */
+export function clearVersion(id: string): boolean {
+  try {
+    window.localStorage.removeItem(versionStorageKey(id));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Download a version as a portable `<id>.json`. Returns false (and touches
+ * nothing) when there is no geometry to export, so the caller can explain it.
+ */
+export function downloadVersion(id: string, version: unknown): boolean {
+  const parsed = parseVersion(version);
+  if (!parsed || !hasGeometry(parsed)) return false;
+  const body = `${JSON.stringify(parsed, null, 2)}\n`;
+  const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${id}.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+/**
+ * Read an uploaded `<id>.json`. Returns null for unreadable JSON or a malformed
+ * envelope; the caller decides what to do with a mismatched id.
+ */
+export async function readUploadedVersion(file: File): Promise<LayoutVersion | null> {
+  try {
+    return parseVersion(JSON.parse(await file.text()));
   } catch {
     return null;
   }
