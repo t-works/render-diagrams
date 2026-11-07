@@ -61,6 +61,14 @@ Plan review: APPROVE WITH CHANGES, loop 2; 6 non-blocking findings applied.
   re-ran — fixed with an explicit `layoutEpoch` trigger rather than relying on
   `diagram` identity. `npx tsc -b`, `npx oxlint`, `npm run validate`,
   `npm run e2e` (25 passed / 1 skipped) all green.
+- Expansion state added 2026-11-07 (user request): a version now records which
+  sections were expanded (`VersionNode.open`, absent for nodes without sections)
+  and a Download writes the flags into the sections themselves. Section toggles
+  are controlled (`src/nodes/SectionsContext.ts` + `src/lib/sections.ts`), so the
+  state reaches the serializers instead of living in the DOM; both autosave and
+  Download serialize from the merged diagram, so a drag after a reload keeps a
+  recorded collapse. Covered by `save-load.spec.ts` (browser: toggle → reload →
+  drag; Node-only serialize/merge cases).
 - Export defect fixed 2026-11-07: Download wrote the compact storage envelope
   (`{ id, nodes: [{ id, position, size }] }`), dropping content, so the artifact
   was not a usable diagram. It now exports the complete diagram via

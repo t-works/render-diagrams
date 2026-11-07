@@ -49,8 +49,10 @@ npm run build      # tsc -b && vite build
 Layout is automatic, and authored JSON never needs coordinates. If you drag or
 resize nodes, the arrangement is **autosaved** to `localStorage` under
 `render-diagrams:layout-version:<id>` — there is no separate unsaved state, so a
-reload or navigating away and back restores what you arranged. Each version is
-scoped to one diagram id; other diagrams keep their own auto-layout. Saving is
+reload or navigating away and back restores what you arranged. Expanded/collapsed
+sections are part of a saved version too, so the reading state survives a reload.
+Each version is scoped to one diagram id; other diagrams keep their own
+auto-layout. Saving is
 silent on success; a failure (e.g. storage unavailable, an unreadable or
 foreign upload) appears as a non-blocking notice over the diagram.
 
@@ -61,8 +63,8 @@ the canvas, and there is no page header row.
 
 | Action | Behavior |
 |---|---|
-| Drag / resize | Debounced autosave (silent on success). |
-| **Download** | Exports the **complete diagram** (all content plus geometry) as `<id>.json` — drop it into `src/diagrams/` or load it back with Upload. |
+| Drag / resize / expand a section | Debounced autosave (silent on success). |
+| **Download** | Exports the **complete diagram** (all content, geometry and expanded sections) as `<id>.json` — drop it into `src/diagrams/` or load it back with Upload. |
 | **Upload** | Re-applies the geometry from an exported diagram or a stored-version envelope; a file for another diagram is refused. |
 | **Reset layout** | Confirms in the menu, deletes the stored version, and re-runs ELK auto-layout. |
 

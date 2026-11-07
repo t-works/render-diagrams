@@ -83,6 +83,9 @@ fields to a node:
 - A `group` sizes itself to its children unless `size` is given.
 - `position` is optional and only ever written by the app; a node without it is
   placed by auto-layout.
+- `section.open` is the initial state; the app records the reader's toggles in the
+  saved version and in Downloaded files, so a downloaded diagram reopens the way
+  it was left.
 
 ## Defaults — an omitted field is never an error
 
@@ -90,7 +93,7 @@ fields to a node:
 |---|---|
 | `direction` | `"LR"` |
 | `edge.variant` | `"default"` |
-| `section.open` | `false` |
+| `section.open` | `false` (a saved version or a Download writes the reader's actual choice) |
 | `sourcePort` / `targetPort` | the node's first `output` / `input` |
 | `node.size` | the kind's default size |
 | `node.size.height` | auto (content-driven; containers derive it from children) |
