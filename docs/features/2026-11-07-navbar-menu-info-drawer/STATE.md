@@ -33,7 +33,7 @@ Plan review: not run (single-run shell change, folded into the run's gates).
   directly. They gained one `openActions` helper; no behavioral assertion was
   dropped.
 - Builder finding 1: the first drawer pass was absolute inside `.page`, so it
-  covered the title and status line too. Wrapped canvas + drawer in
+  covered the title (and then the status row) too. Wrapped canvas + drawer in
   `.page__body` (relative, `flex: 1`) so the drawer overlays exactly the diagram
   area, per the brief; the AC4 test asserts the drawer box equals the canvas box.
 - Builder finding 2: the info drawer is portaled-trigger + in-page panel; the
@@ -46,3 +46,7 @@ Plan review: not run (single-run shell change, folded into the run's gates).
   1280x760), then moved the title into the drawer and gave the trigger a visible
   "Info" label; the page header is gone and a visually hidden `h1` keeps the
   outline. AC1/AC3 updated to assert the title and the labeled trigger.
+- Second user feedback: remove the "Layout saved" status row and its reserved
+  area. Success is now silent; failures keep a `role="alert"` notice positioned
+  over the diagram (no layout space). This supersedes the visible-confirmation
+  part of user-layout-versions AC10; its STATE records the overlap.

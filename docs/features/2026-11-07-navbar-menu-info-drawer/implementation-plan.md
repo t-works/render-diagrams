@@ -5,15 +5,15 @@
 A shell-only change: move the three layout/version buttons into a dropdown
 anchored to a new hamburger at the right end of the topbar, and move the
 description + legend into a left overlay drawer. No state model, storage or
-layout code changes. The diagram page keeps its title, status line, validation
-panels and canvas.
+layout code changes. The diagram page keeps its validation panels and canvas; the
+title moves into the drawer and the status row is removed.
 
 ## Blast radius
 
 | File | Change |
 |---|---|
 | `src/Topbar.tsx` | Render an empty `#topbar-actions` slot at the right end (after the nav). |
-| `src/DiagramPage.tsx` | Portal the info + actions triggers into the slot; dropdown menu with the existing handlers; drawer markup with the title, description and legend (no page header; a visually hidden `h1` keeps the outline); keep the hidden file input mounted at page level; menu/drawer focus + Escape/outside-click handling. |
+| `src/DiagramPage.tsx` | Portal the info + actions triggers into the slot; dropdown menu with the existing handlers; drawer markup with the title, description and legend (no page header; a visually hidden `h1` keeps the outline); keep the hidden file input mounted at page level; menu/drawer focus + Escape/outside-click handling; drop the status row in favour of a failure-only overlay notice. |
 | `src/App.css` | Topbar actions slot, icon buttons (the Info trigger is labeled), menu, drawer, `.sr-only`; remove the unused header rules; reduced-motion overrides. |
 | `e2e/nav-shell.spec.ts` (new) | Shell ACs: triggers, menu contents, drawer contents, overlay/no-reflow, keyboard + focus return, narrow width, reduced motion. |
 | `e2e/smoke.spec.ts` | Open the menu before asserting Re-layout is enabled. |

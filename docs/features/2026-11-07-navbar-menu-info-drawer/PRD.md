@@ -56,8 +56,9 @@ single, predictable place for each kind of control.
 2. **Parity of actions** — Given the menu is opened, then it offers
    Re-layout (or Reset layout when a saved version exists), Download and Upload;
    each performs exactly its current behavior, including the inline Reset
-   confirmation, autosave on drag/resize, per-diagram storage scope, and the
-   aria-live status line.
+   confirmation, autosave on drag/resize and per-diagram storage scope. The
+   reserved status row is gone: a successful save/export is silent, and only
+   failures surface, as a non-blocking notice over the diagram.
 3. **Info in the drawer** — Given a diagram, when the info panel is opened,
    then its title, description (when present) and legend (when present) appear
    inside the left panel; when it is closed, its content is not in the tab order
@@ -98,7 +99,8 @@ buttons on the right.
   title, description and the kind legend, and a close button. No scrim; clicking
   the diagram, pressing Escape, or pressing the close button dismisses it.
 - **Canvas** — same size before and after; the drawer is an overlay, not a
-  layout participant.
+  layout participant. The layout-status row and its reserved space are removed;
+  failures instead appear as an overlay notice anchored to the diagram area.
 
 **Edge cases and empty/error states**
 
@@ -157,3 +159,4 @@ selector churn in the e2e suite, which the gates catch directly.
 | 7 | No menu/drawer state persistence; both reset on navigation | orchestrator | 2026-11-07 |
 | 8 | A visually hidden `h1` keeps the document heading when the drawer is closed | orchestrator | 2026-11-07 |
 | 9 | The Info trigger gets a visible label (an icon-only trigger read as “nothing there”) | orchestrator | 2026-11-07 |
+| 10 | The “Layout saved” status row and its reserved area are dropped; success is silent, failures remain as an overlay notice | user | 2026-11-07 |

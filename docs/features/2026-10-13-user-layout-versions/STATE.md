@@ -61,3 +61,8 @@ Plan review: APPROVE WITH CHANGES, loop 2; 6 non-blocking findings applied.
   re-ran — fixed with an explicit `layoutEpoch` trigger rather than relying on
   `diagram` identity. `npx tsc -b`, `npx oxlint`, `npm run validate`,
   `npm run e2e` (25 passed / 1 skipped) all green.
+- Superseded (2026-11-07, feature `navbar-menu-info-drawer`): the visible
+  "Layout saved" status row is removed at the user's request. Autosave success is
+  silent; failures (storage unavailable, bad upload) remain as an overlay
+  `role="alert"`. AC10's visible confirmation is therefore no longer met by
+  design; the save-load specs assert persistence/geometry instead of the text.

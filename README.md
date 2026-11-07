@@ -50,7 +50,9 @@ Layout is automatic, and authored JSON never needs coordinates. If you drag or
 resize nodes, the arrangement is **autosaved** to `localStorage` under
 `render-diagrams:layout-version:<id>` — there is no separate unsaved state, so a
 reload or navigating away and back restores what you arranged. Each version is
-scoped to one diagram id; other diagrams keep their own auto-layout.
+scoped to one diagram id; other diagrams keep their own auto-layout. Saving is
+silent on success; a failure (e.g. storage unavailable, an unreadable or
+foreign upload) appears as a non-blocking notice over the diagram.
 
 The actions live in the topbar's hamburger menu at the right end of the navbar;
 the diagram title, description and kind legend live in the **Info** panel that
@@ -59,7 +61,7 @@ the canvas, and there is no page header row.
 
 | Action | Behavior |
 |---|---|
-| Drag / resize | Debounced autosave; a live status line confirms it. |
+| Drag / resize | Debounced autosave (silent on success). |
 | **Download** | Exports the current geometry as `<id>.json` (portable, commitable). |
 | **Upload** | Re-applies an exported `<id>.json`; a file for another diagram is refused. |
 | **Reset layout** | Confirms in the menu, deletes the stored version, and re-runs ELK auto-layout. |
