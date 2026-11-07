@@ -169,15 +169,12 @@ test('autosaves a drag, replaces it on the next adjustment, and reloads identica
   page,
 }) => {
   await openFixture(page);
-  const status = page.getByTestId('layout-status');
   const before = await readNode(page, 'e2e-leaf');
 
   // No version exists before the user acts; opening wrote nothing (AC6).
   expect(await storedVersion(page)).toBeNull();
 
   await dragNode(page, 'e2e-leaf', 140, 90);
-  await expect(status).toContainText('Layout saved');
-
   const first = await expectSaved(page);
   expect(first.id).toBe(FIXTURE_ID);
 
@@ -253,7 +250,6 @@ test('autosaves a resize and keeps a leaf width-only (AC2/AC3)', async ({ page }
 
 test('Reset confirms, clears the version, and restores auto-layout (AC7/AC9)', async ({ page }) => {
   await openFixture(page);
-  const status = page.getByTestId('layout-status');
   const baseline = await readNode(page, 'e2e-leaf');
 
   await dragNode(page, 'e2e-leaf', 160, 100);
@@ -281,7 +277,6 @@ test('Reset confirms, clears the version, and restores auto-layout (AC7/AC9)', a
 
   await page.getByTestId('reset').click();
   await page.getByTestId('reset-confirm').click();
-  await expect(status).toContainText('back to auto-layout');
   await expect.poll(() => storedVersion(page), { timeout: 5_000 }).toBeNull();
 
   // Auto-layout is back: the leaf returns to its pre-drag ELK position.
@@ -304,7 +299,6 @@ test('Reset confirms, clears the version, and restores auto-layout (AC7/AC9)', a
 
 test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page }) => {
   await openFixture(page);
-  const status = page.getByTestId('layout-status');
 
   await dragNode(page, 'e2e-leaf', 120, 70);
   const saved = await expectSaved(page);
@@ -315,7 +309,6 @@ test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page 
   expect(download.suggestedFilename()).toBe(`${FIXTURE_ID}.json`);
   const filePath = await download.path();
   expect(filePath).not.toBeNull();
-  await expect(status).toContainText(`Downloaded ${FIXTURE_ID}.json`);
 
   // Reset back to auto-layout, then re-apply the exported artifact through the
   // menu's Upload item (the hidden input is page-level, so the picker survives
@@ -331,7 +324,7 @@ test('Download then Upload round-trips the geometry (AC10/AC11)', async ({ page 
   await openActions(page);
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('upload').click()]);
   await chooser.setFiles(filePath!);
-  await expect(status).toContainText('Applied layout');
+  await expect(page.getByTestId('layout-error')).toHaveCount(0);
   await expect
     .poll(async () => (await readNode(page, 'e2e-leaf')).x, { timeout: 10_000 })
     .toBeCloseTo(expected.x, 1);
@@ -387,15 +380,12 @@ test('Uploading a layout for another diagram is refused (AC5/AC11)', async ({ pa
   );
 
   await page.getByTestId('upload-input').setInputFiles(other);
-  await expect(page.getByTestId('layout-status')).toContainText('not this diagram');
+  await expect(page.getByTestId('layout-error')).toContainText('not this diagram');
   expect(await storedVersion(page)).toBeNull();
 });
 
-test('controls are keyboard reachable and the status region is live (AC10)', async ({ page }) => {
+test('controls are keyboard reachable (AC10)', async ({ page }) => {
   await openFixture(page);
-  const status = page.getByTestId('layout-status');
-  await expect(status).toHaveAttribute('aria-live', 'polite');
-  await expect(status).toHaveAttribute('role', 'status');
 
   // The triggers are focusable; opening with the keyboard moves focus into the
   // menu, ArrowDown walks it, and Escape returns focus to the trigger.
@@ -421,10 +411,10 @@ test('controls are keyboard reachable and the status region is live (AC10)', asy
   await expect(info).toBeFocused();
 
   // Download with nothing adjusted exports the current auto-layout rather than
-  // failing: the confirmation is visible (AC10).
+  // failing (a successful export is intentionally silent).
   await openActions(page);
   await page.getByTestId('download').click();
-  await expect(status).toContainText(`Downloaded ${FIXTURE_ID}.json`);
+  await expect(page.getByTestId('layout-error')).toHaveCount(0);
 
   await dragNode(page, 'e2e-leaf', 60, 40);
   const saved = await expectSaved(page);

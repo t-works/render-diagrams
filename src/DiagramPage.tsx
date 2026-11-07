@@ -85,8 +85,10 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
   // geometry-less version) keeps the original identity and the exact old path.
   const [version, setVersion] = useState<LayoutVersion | null>(() => loadVersion(loaded.id));
   const [hasSaved, setHasSaved] = useState(() => hasGeometry(loadVersion(loaded.id)));
-  const [status, setStatus] = useState('');
-  const [statusError, setStatusError] = useState(false);
+  // Failures only: a successful save/export is silent (the user asked for the
+  // status row and its reserved space to go away). The message is an overlay, so
+  // it never takes layout space away from the canvas.
+  const [error, setError] = useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -181,14 +183,9 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
     const outcome = saveVersion(loaded.id, loaded.diagram, getNodes());
     if (outcome.status === 'saved') {
       setHasSaved(true);
-      setStatus(`Layout saved (${outcome.version.nodes.length} nodes).`);
-      setStatusError(false);
-    } else if (outcome.status === 'empty') {
-      setStatus('Nothing to save yet — move or resize a node first.');
-      setStatusError(true);
-    } else {
-      setStatus('Could not save locally: browser storage is unavailable. Use Download to export.');
-      setStatusError(true);
+      setError(null);
+    } else if (outcome.status === 'unavailable') {
+      setError('Could not save locally: browser storage is unavailable. Use Download to export.');
     }
   }, [getNodes, loaded.diagram, loaded.id, ready]);
 
@@ -224,12 +221,10 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
     if (!loaded.diagram) return;
     const live = serializeVersion(loaded.diagram, getNodes());
     if (!downloadVersion(loaded.id, live)) {
-      setStatus('No layout to download yet — move or resize a node first.');
-      setStatusError(true);
+      setError('No layout to download yet — move or resize a node first.');
       return;
     }
-    setStatus(`Downloaded ${loaded.id}.json.`);
-    setStatusError(false);
+    setError(null);
   }, [getNodes, loaded.diagram, loaded.id]);
 
   const handleUpload = useCallback(
@@ -237,29 +232,23 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
       if (!file || !loaded.diagram) return;
       void readUploadedVersion(file).then((parsed) => {
         if (!parsed) {
-          setStatus(`Could not read “${file.name}” as a layout version.`);
-          setStatusError(true);
+          setError(`Could not read “${file.name}” as a layout version.`);
           return;
         }
         if (parsed.id !== loaded.id) {
-          setStatus(`“${file.name}” holds the layout for “${parsed.id}”, not this diagram.`);
-          setStatusError(true);
+          setError(`“${file.name}” holds the layout for “${parsed.id}”, not this diagram.`);
           return;
         }
         if (!hasGeometry(parsed)) {
-          setStatus(`“${file.name}” carries no geometry — nothing to apply.`);
-          setStatusError(true);
+          setError(`“${file.name}” carries no geometry — nothing to apply.`);
           return;
         }
         const persisted = writeVersion(parsed);
         applyVersion(parsed);
         setHasSaved(true);
-        setStatus(
-          persisted
-            ? `Applied layout from “${file.name}”.`
-            : `Applied layout from “${file.name}” for this session only — storage is unavailable.`,
+        setError(
+          persisted ? null : `Applied “${file.name}” for this session only — storage is unavailable.`,
         );
-        setStatusError(!persisted);
       });
     },
     [applyVersion, loaded.diagram, loaded.id],
@@ -271,12 +260,9 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
     setMenuOpen(false);
     setHasSaved(false);
     applyVersion(null);
-    setStatus(
-      cleared
-        ? 'Saved layout cleared — back to auto-layout.'
-        : 'Auto-layout restored for this session — browser storage is unavailable.',
+    setError(
+      cleared ? null : 'Auto-layout restored for this session — browser storage is unavailable.',
     );
-    setStatusError(!cleared);
     // The menu (and the confirm item) unmounts; keep focus on the trigger.
     requestAnimationFrame(() => actionsToggle.current?.focus());
   }, [applyVersion, loaded.id]);
@@ -363,15 +349,6 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
       {/* Always present for the document outline; the visible title lives in the drawer. */}
       <h1 className="sr-only">{loaded.title}</h1>
 
-      <p
-        className={`layout-status${statusError ? ' layout-status--error' : ''}`}
-        role="status"
-        aria-live="polite"
-        data-testid="layout-status"
-      >
-        {status}
-      </p>
-
       {loaded.errors.length > 0 && (
         <div className="panel panel--error">
           <h2>Invalid diagram</h2>
@@ -394,6 +371,12 @@ function DiagramView({ loaded }: { loaded: LoadedDiagram }) {
       )}
 
       <div className="page__body">
+        {error && (
+          <p className="layout-error" role="alert" data-testid="layout-error">
+            {error}
+          </p>
+        )}
+
         {diagram && !ready && <div className="panel">Laying out…</div>}
 
         {diagram && ready && (
